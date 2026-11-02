@@ -1,0 +1,32 @@
+AI PROMPT LOG - Software Project I (Winter 2026) - Team 1000
+Travel Planning and Booking Platform
+Required by the project description, section 11.1. Every team member appends entries for
+prompts that materially contributed to the submitted project (newest at the bottom).
+
+================================================
+Date: 2026-11-02
+Student: Omar Raslan (team leader)
+Tool: Claude (Anthropic)
+Related Requirement: Milestone 1 - all modules (ACC, FLT, HTL, PAY, ITN, BLG, GEN); repository setup
+
+Prompt:
+"Here is the project [project description PDF, official requirements workbook, official reference
+datasets]. I want you to do everything ... do exactly everything required and don't invent or fill in
+gaps by yourself, you can ask me ... also create the repo and do everything. Start by doing milestone 1
+only since that's what's required. Also be careful for any hidden / embedded links like the user story
+docs ... you can ask me anything but 1 question at a time."
+Follow-up decisions given to the AI during the conversation:
+ - Team leader: Omar Raslan. Repository: SweProject1 (private).
+ - Platform currency (PAY-04): USD. Supported currencies (GEN-12): EGP, AED, GBP, USD, EUR, JPY, SAR.
+ - Approved readings for gaps in the documents (see README "Team decisions and assumptions").
+ - Split the Milestone 1 work between the 7 team members (team leader takes the largest share).
+
+How the output was used:
+The AI read the PDF, both workbooks and the embedded Google Sheets links (verified identical to the
+attached files), asked the clarifying questions above, then generated the NestJS backend (schemas,
+modules, controllers, services, validation, Swagger docs, seed scripts), an automated end-to-end test
+run (179 checks, incl. concurrent seat/room holds and signed Stripe webhooks), the documentation in
+docs/, and the per-member work packages. All code was reviewed and is being integrated through
+feature branches and pull requests into develop. Credentials were NOT shared with the AI: the MongoDB
+Atlas URI and Stripe keys are entered locally in .env only (section 11.2 d).
+================================================

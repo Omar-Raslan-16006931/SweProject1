@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+# builds
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+# environment / secrets (PDF 8.11)
+.env
+.env.*
+!.env.example
+# uploaded images (GEN-08) are runtime data
+/backend/uploads/
+/uploads/
+# logs & OS / editor files
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+coverage/
+# private team-leader material (never pushed)
+_team-packages/
+_private/

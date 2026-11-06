@@ -9,6 +9,7 @@ import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/roles.guard';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+import { BlogModule } from './modules/blog/blog.module';
 import { ReferenceModule } from './modules/reference/reference.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AuditModule } from './modules/audit/audit.module';
@@ -31,6 +32,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     UploadsModule,
     // features
     UsersModule,
+    BlogModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

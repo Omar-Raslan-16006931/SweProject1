@@ -30,3 +30,19 @@ docs/, and the per-member work packages. All code was reviewed and is being inte
 feature branches and pull requests into develop. Credentials were NOT shared with the AI: the MongoDB
 Atlas URI and Stripe keys are entered locally in .env only (section 11.2 d).
 ================================================
+Date: 2026-11-08
+
+Tool: ChatGPT (OpenAI) and GitHub Copilot (VS Code)
+
+Prompt 1 (ChatGPT):
+"Unzip this package and follow AI_AGENT_INSTRUCTIONS.md inside it exactly, step by step. Stop and ask me if any check fails. Do not change the code."
+
+Prompt 2 (GitHub Copilot):
+"In backend/src/app.module.ts, add the import for BlogModule and add BlogModule to the @Module imports array immediately after UsersModule. Do not remove, rewrite, or modify any other code."
+
+How I used the AI output:
+I used ChatGPT to guide me step by step through integrating Package 7 (Blog & Community), troubleshooting build errors, creating a Git feature branch, and preparing a pull request.
+
+I used GitHub Copilot to register BlogModule in app.module.ts. I reviewed the changes, committed my Blog module, and pushed the branch to GitHub.
+
+The build currently has two errors caused by missing itinerary module and service files.

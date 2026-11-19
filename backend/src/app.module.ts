@@ -13,6 +13,8 @@ import { ReferenceModule } from './modules/reference/reference.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     UploadsModule,
     // features
     UsersModule,
+    ReportsModule,
+    AdminModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

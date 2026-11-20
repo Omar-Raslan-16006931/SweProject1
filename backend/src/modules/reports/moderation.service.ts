@@ -43,8 +43,12 @@ export class ModerationService {
   }
 
   /** Whether the item is publicly visible and therefore reportable by other users. */
-  isReportable(type: ReportTargetType, doc: any) {
+  async isReportable(type: ReportTargetType, doc: any) {
     if (doc.hidden) return false;
+    if (type === ReportTargetType.COMMENT) {
+      const post = await this.posts.findById(doc.post).lean();
+      return !!post && post.status === PostStatus.PUBLISHED && !post.hidden && !post.authorDeactivated;
+    }
     if (type === ReportTargetType.POST) return doc.status === PostStatus.PUBLISHED && !doc.authorDeactivated;
     if (type === ReportTargetType.ITINERARY) return doc.visibility === Visibility.PUBLIC && !doc.authorDeactivated;
     return true;

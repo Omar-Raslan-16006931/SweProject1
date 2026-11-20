@@ -1,9 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform, Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import { IsBoolean, IsEmail, IsEnum, IsIn, IsMongoId, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { AccountStatus, BookingStatus, BookingType, ReportTargetType, Role } from '../../../common/enums';
 import { PaginationQueryDto } from '../../../common/dto/pagination.dto';
-import { PASSWORD_MESSAGE, PASSWORD_REGEX } from '../../auth/dto/auth.dto';
+import { PASSWORD_MAX, PASSWORD_MAX_MESSAGE, PASSWORD_MESSAGE, PASSWORD_REGEX } from '../../auth/dto/auth.dto';
 
 /** ACC-13 */
 export class CreateModeratorDto {
@@ -24,7 +24,7 @@ export class CreateModeratorDto {
   providerId: string;
 
   @ApiProperty({ example: 'TempPass123', description: `Temporary password set by the admin; must be changed at first login. ${PASSWORD_MESSAGE}` })
-  @IsString() @Matches(PASSWORD_REGEX, { message: PASSWORD_MESSAGE })
+  @IsString() @MaxLength(PASSWORD_MAX, { message: PASSWORD_MAX_MESSAGE }) @Matches(PASSWORD_REGEX, { message: PASSWORD_MESSAGE })
   temporaryPassword: string;
 }
 
@@ -57,7 +57,7 @@ export class ResolveReportDto {
 }
 
 export class ContentVisibilityDto {
-  @ApiProperty({ example: true, description: 'true = hide, false = unhide' }) @Type(() => Boolean) @IsBoolean() hidden: boolean;
+  @ApiProperty({ example: true, description: 'true = hide, false = unhide' }) @IsBoolean({ message: 'hidden must be true or false' }) hidden: boolean;
 }
 
 export class AuditQueryDto extends PaginationQueryDto {

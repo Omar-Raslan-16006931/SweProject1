@@ -20,6 +20,7 @@ export class PassengerDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(120)
+  @Matches(/^(?=.*\p{L})[\p{L}\p{M}\p{N} .'\-]+$/u, { message: 'fullName must contain letters (digits only or symbols are not a name)' })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   fullName: string;
 

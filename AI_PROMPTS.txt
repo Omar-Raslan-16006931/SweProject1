@@ -112,3 +112,34 @@ listed in docs/testing/TEST_REPORT.md) and the exchange-rate integration was ver
 real FXRatesAPI. Stripe was exercised through a local stand-in with signed webhooks; no credentials
 were shared with the AI.
 ================================================
+
+================================================
+Date: 2026-11-20
+Student: Omar Raslan (team leader)
+Tool: Claude (Anthropic)
+Related Requirement: All Milestone 1 requirements (independent QA); ACC-01, ACC-05, ACC-15, ACC-17, FLT-03, FLT-05,
+FLT-11, FLT-19, FLT-22, FLT-26, FLT-30, HTL-05, HTL-10, HTL-11, HTL-18, HTL-21, ITN-01, ITN-05, ITN-14, ITN-16,
+PAY-01, PAY-02, PAY-03, GEN-01, GEN-08, GEN-09, GEN-10, GEN-13
+
+Prompts:
+"Violently test the project milestone 1 according to these files (project description, mock airports data,
+requirements sheet), check from A-Z every single detail, all edge cases and all scenarios and dumb stuff like
+departure date in past. Don't alter the tests to match output. Make sure there are 0 errors and edge cases."
+Follow-ups: "Check again everything", "Another deeper harder round", "4th and final round, check integration and
+all logic and database schema and everything and deep test it", "Do those for me".
+
+How the output was used:
+The AI wrote an independent adversarial test suite from the project description and the requirements sheet
+(backend/test/qa, 1012 checks over four rounds: invalid and absurd input, past and impossible dates, time zones and
+daylight-saving gaps, concurrent requests, a role/permission matrix over every endpoint, forged tokens, late and
+duplicate Stripe webhooks, an end-to-end journey across all modules, and whole-database consistency checks).
+It ran the suite and the existing 495 e2e checks against a local MongoDB with local Stripe/FXRatesAPI stand-ins,
+and fixed every failure in the backend, among them: atomic login lockout (parallel brute force), refunds now use
+the cancellation tiers accepted at booking, holds cannot be paid after departure or after a provider is
+deactivated, at most one open PaymentIntent per booking (duplicate successes refunded), hotel days-before-check-in
+and stay dates follow the hotel's local calendar, race-safe image limits with no orphaned files, concurrency
+conflicts return 409 instead of 500, oversized bodies return 413, unreadOnly notification filter, flight search
+date validation, sanity limits on prices/seats/occupancy/amounts, DST-gap local times rejected, round-trip order
+kept on reschedule, room occupancy cannot drop below booked guests, and a clear startup error when .env is missing.
+The FXRatesAPI integration was also checked live. No credentials were shared with the AI.
+================================================

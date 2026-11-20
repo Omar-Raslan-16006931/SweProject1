@@ -9,8 +9,8 @@ import { AuthUser } from '../../common/decorators/current-user.decorator';
 import { BookingStatus, Role } from '../../common/enums';
 import { notFound } from '../../common/utils/errors';
 import { paginateQuery } from '../../common/utils/pagination';
-import { todayUtc } from '../../common/utils/dates';
 import { CreateReviewDto, UpdateReviewDto } from './reviews.dto';
+import { HotelsService } from '../hotels/hotels.service';
 
 @Injectable()
 export class ReviewsService {
@@ -18,6 +18,7 @@ export class ReviewsService {
     @InjectModel(Review.name) private reviews: Model<Review>,
     @InjectModel(Hotel.name) private hotels: Model<Hotel>,
     @InjectModel(HotelReservation.name) private reservations: Model<HotelReservation>,
+    private hotelsService: HotelsService,
   ) {}
 
   /** HTL-23: average rating recalculated from visible reviews. */
@@ -50,11 +51,15 @@ export class ReviewsService {
 
   /** HTL-23 */
   async create(reservationId: string, dto: CreateReviewDto, user: AuthUser) {
-    // HTL-23: Confirmed becomes Completed once the check-out date has passed (do not wait for the scheduler).
-    await this.reservations.updateOne(
-      { _id: reservationId, status: BookingStatus.CONFIRMED, checkOut: { $lt: todayUtc() } },
-      { $set: { status: BookingStatus.COMPLETED, completedAt: new Date() } },
-    );
+    // HTL-23: Confirmed becomes Completed once the check-out date has passed on the hotel's calendar (do not wait for the scheduler).
+    const pending = await this.reservations.findById(reservationId).select('hotel status').lean();
+    if (pending?.status === BookingStatus.CONFIRMED) {
+      const h = await this.hotels.findById(pending.hotel).select('cityId').lean();
+      await this.reservations.updateOne(
+        { _id: reservationId, status: BookingStatus.CONFIRMED, checkOut: { $lt: await this.hotelsService.todayForCity(h?.cityId ?? '') } },
+        { $set: { status: BookingStatus.COMPLETED, completedAt: new Date() } },
+      );
+    }
     const res = await this.reservations.findById(reservationId).lean();
     if (!res || String(res.user) !== user.id) throw notFound('Hotel reservation');
     if (res.status !== BookingStatus.COMPLETED) {

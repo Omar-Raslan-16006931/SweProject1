@@ -180,9 +180,18 @@ export class BlogService {
     const p = await this.getOwn(id, user);
     this.uploads.validate(files, p.images.length);
     const saved = await this.uploads.save(files, 'posts');
-    p.images.push(...(saved as any));
-    await p.save();
-    return this.view(p, user);
+    let updated: any = null;
+    try {
+      updated = await this.posts.findOneAndUpdate(
+        { _id: p._id, ...this.uploads.roomFor('images', saved.length) },
+        { $push: { images: { $each: saved } } },
+        { new: true },
+      );
+    } finally {
+      if (!updated) await this.uploads.removeAll(saved);
+    }
+    if (!updated) throw this.uploads.limitError();
+    return this.view(updated, user);
   }
 
   async removeImage(id: string, imageId: string, user: AuthUser) {

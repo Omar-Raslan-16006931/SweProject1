@@ -5,6 +5,7 @@ import {
   Max, MaxLength, Min, ValidateNested,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination.dto';
+import { LIMITS } from '../../../common/enums';
 import { CancellationTierDto } from '../../flights/dto/airline.dto';
 
 const trim = ({ value }: any) => (typeof value === 'string' ? value.trim() : value);
@@ -79,24 +80,24 @@ export class CreateRoomDto {
   type: string;
 
   @ApiProperty({ example: 2 })
-  @Type(() => Number) @IsInt() @Min(1)
+  @Type(() => Number) @IsInt() @Min(1) @Max(LIMITS.MAX_ROOM_BEDS)
   beds: number;
 
   @ApiProperty({ example: 3, description: 'Maximum occupancy (>= 1)' })
-  @Type(() => Number) @IsInt() @Min(1)
+  @Type(() => Number) @IsInt() @Min(1) @Max(LIMITS.MAX_ROOM_OCCUPANCY)
   maxOccupancy: number;
 
   @ApiProperty({ example: 95, description: 'Price per night (> 0), platform currency' })
-  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0.01, { message: 'pricePerNight must be greater than 0' })
+  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0.01, { message: 'pricePerNight must be greater than 0' }) @Max(LIMITS.MAX_PRICE)
   pricePerNight: number;
 }
 
 /** HTL-05 / HTL-06 */
 export class UpdateRoomDto {
-  @ApiPropertyOptional({ example: 2 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) beds?: number;
-  @ApiPropertyOptional({ example: 3 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) maxOccupancy?: number;
+  @ApiPropertyOptional({ example: 2 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(LIMITS.MAX_ROOM_BEDS) beds?: number;
+  @ApiPropertyOptional({ example: 3 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(LIMITS.MAX_ROOM_OCCUPANCY) maxOccupancy?: number;
   @ApiPropertyOptional({ example: 99 })
-  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0.01, { message: 'pricePerNight must be greater than 0' })
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0.01, { message: 'pricePerNight must be greater than 0' }) @Max(LIMITS.MAX_PRICE)
   pricePerNight?: number;
   @ApiPropertyOptional({ description: 'false = deactivate (excluded from search); rejected if it overlaps active reservations (HTL-06)' })
   @IsOptional() @IsBoolean()

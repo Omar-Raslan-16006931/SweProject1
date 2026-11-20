@@ -171,6 +171,9 @@ export class AdminService {
   /** ACC-17: read-only list of all flight and hotel bookings. */
   async bookings(q: AdminBookingsQueryDto) {
     const dateFilter: any = {};
+    if (q.from && q.to && parseDateOnly(q.from, 'from') > parseDateOnly(q.to, 'to')) {
+      throw new BadRequestException({ message: '"from" cannot be after "to"', field: 'from' });
+    }
     if (q.from) dateFilter.$gte = parseDateOnly(q.from, 'from');
     if (q.to) dateFilter.$lt = addDays(parseDateOnly(q.to, 'to'), 1);
     const statusMatch = q.status ? { status: q.status } : {};

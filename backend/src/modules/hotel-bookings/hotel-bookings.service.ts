@@ -13,7 +13,7 @@ import { AuthUser } from '../../common/decorators/current-user.decorator';
 import { BookingStatus, BookingType, HOLD_MINUTES, NotificationType, PLATFORM_CURRENCY, Role } from '../../common/enums';
 import { HotelBookingRequestDto, HotelReservationsQueryDto } from './dto/hotel-booking.dto';
 import { formatDateOnly, parseDateOnly, todayUtc } from '../../common/utils/dates';
-import { money, selectRefundPercent, wholeDaysUntil } from '../../common/utils/refund';
+import { money, selectRefundPercent } from '../../common/utils/refund';
 import { generateBookingReference } from '../../common/utils/reference-code';
 import { isDuplicateKeyError, notFound } from '../../common/utils/errors';
 import { paginateQuery } from '../../common/utils/pagination';
@@ -40,7 +40,7 @@ export class HotelBookingsService implements OnModuleInit, BookingHandler {
     await this.expireHolds();
     const hotel = await this.hotelsService.getHotel(dto.hotelId);
     if (!hotel.active) throw new BadRequestException({ message: 'This hotel is not accepting bookings (ACC-15)' });
-    const stay = this.hotelsService.parseStay(dto.checkIn, dto.checkOut);
+    const stay = this.hotelsService.parseStay(dto.checkIn, dto.checkOut, await this.hotelsService.todayForCity(hotel.cityId));
 
     const ids = dto.rooms.map((r) => r.roomId);
     if (new Set(ids).size !== ids.length) {
@@ -248,9 +248,13 @@ export class HotelBookingsService implements OnModuleInit, BookingHandler {
   async getPayable(bookingId: string): Promise<PayableBooking> {
     const r = await this.reservations.findById(bookingId).lean();
     if (!r) throw notFound('Hotel reservation');
+    if (r.status === BookingStatus.PENDING_PAYMENT && !(await this.hotels.exists({ _id: r.hotel, active: true }))) {
+      throw new ConflictException({ message: 'This reservation can no longer be paid: the hotel has been deactivated (ACC-15)', code: 'NOT_BOOKABLE' });
+    }
     return {
       id: String(r._id), userId: String(r.user), status: r.status, amount: r.total, currency: r.currency,
       holdExpiresAt: r.holdExpiresAt, policyAccepted: !!r.policyAcceptance?.acceptedAt, reference: r.reference,
+      paymentId: r.payment ? String(r.payment) : undefined,
     };
   }
 
@@ -291,6 +295,12 @@ export class HotelBookingsService implements OnModuleInit, BookingHandler {
 
   /** HTL-17 */
   async onPaymentSucceeded(bookingId: string, paymentId: string) {
+    const pending = await this.reservations.findById(bookingId).lean();
+    if (pending?.status === BookingStatus.PENDING_PAYMENT && !(await this.hotels.exists({ _id: pending.hotel, active: true }))) {
+      // ACC-15: a deactivated hotel cannot be booked; the late payment is refunded by the caller.
+      await this.expireOne(pending._id);
+      return 'not_pending';
+    }
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
         const r = await this.reservations.findOneAndUpdate(
@@ -335,24 +345,41 @@ export class HotelBookingsService implements OnModuleInit, BookingHandler {
       .find({ status: BookingStatus.PENDING_PAYMENT, holdExpiresAt: { $lte: new Date() } })
       .select('_id')
       .lean();
-    for (const { _id } of due) {
-      const r = await this.reservations.findOneAndUpdate(
-        { _id, status: BookingStatus.PENDING_PAYMENT },
-        { $set: { status: BookingStatus.EXPIRED, expiredAt: new Date() } },
-      );
-      if (!r) continue;
-      await this.hotelsService.releaseLocks(_id);
-      await this.payments.cancelIntentsForBooking(BookingType.HOTEL, _id);
-    }
+    for (const { _id } of due) await this.expireOne(_id);
+  }
+
+  private async expireOne(_id: Types.ObjectId) {
+    const r = await this.reservations.findOneAndUpdate(
+      { _id, status: BookingStatus.PENDING_PAYMENT },
+      { $set: { status: BookingStatus.EXPIRED, expiredAt: new Date() } },
+    );
+    if (!r) return;
+    await this.hotelsService.releaseLocks(_id);
+    await this.payments.cancelIntentsForBooking(BookingType.HOTEL, _id);
   }
 
   /** HTL-23: a Confirmed reservation becomes Completed once its check-out date has passed. */
   @Cron(CronExpression.EVERY_10_MINUTES)
   async completePastStays() {
-    await this.reservations.updateMany(
-      { status: BookingStatus.CONFIRMED, checkOut: { $lt: todayUtc() } },
-      { $set: { status: BookingStatus.COMPLETED, completedAt: new Date() } },
-    );
+    // A stay is complete once its check-out date has passed on the hotel's own calendar.
+    const candidates = await this.reservations
+      .find({ status: BookingStatus.CONFIRMED, checkOut: { $lte: todayUtc() } })
+      .select('hotel checkOut')
+      .lean();
+    const todayByHotel = new Map<string, Date>();
+    for (const c of candidates) {
+      const key = String(c.hotel);
+      if (!todayByHotel.has(key)) {
+        const h = await this.hotels.findById(c.hotel).select('cityId').lean();
+        todayByHotel.set(key, await this.hotelsService.todayForCity(h?.cityId ?? ''));
+      }
+      if (c.checkOut < todayByHotel.get(key)!) {
+        await this.reservations.updateOne(
+          { _id: c._id, status: BookingStatus.CONFIRMED },
+          { $set: { status: BookingStatus.COMPLETED, completedAt: new Date() } },
+        );
+      }
+    }
   }
 
   // ------------------------------------------------------------------ cancellation (HTL-21)
@@ -363,18 +390,27 @@ export class HotelBookingsService implements OnModuleInit, BookingHandler {
     if (r.status !== BookingStatus.CONFIRMED) {
       throw new ConflictException({ message: `Only Confirmed reservations can be cancelled (current status: ${r.status})` });
     }
-    if (todayUtc() >= r.checkIn) throw new ConflictException({ message: 'Cancellation is only possible before the check-in date (HTL-21)' });
     const hotel = await this.hotels.findById(r.hotel).lean();
-    const days = wholeDaysUntil(r.checkIn);
-    const percent = selectRefundPercent(hotel?.cancellationTiers ?? [], days);
-    return { r, hotel, quote: { daysBeforeCheckIn: days, refundPercent: percent, refundAmount: money((r.total * percent) / 100) } };
+    const today = await this.hotelsService.todayForCity(hotel?.cityId ?? '');
+    if (today >= r.checkIn) throw new ConflictException({ message: 'Cancellation is only possible before the check-in date (HTL-21)' });
+    // HTL-10: days before the check-in DATE, counted in calendar days on the hotel's calendar (check-in tomorrow = 1 day before).
+    const days = Math.max(0, Math.round((r.checkIn.getTime() - today.getTime()) / 86400000));
+    const tiers = this.applicableTiers(r, hotel);
+    const percent = selectRefundPercent(tiers, days);
+    return { r, hotel, tiers, quote: { daysBeforeCheckIn: days, refundPercent: percent, refundAmount: money((r.total * percent) / 100) } };
+  }
+
+  /** PDF 6.4 / PAY-02: the tiers accepted with the reservation apply, not later changes by the hotel. */
+  private applicableTiers(r: any, hotel: any): { daysBefore: number; refundPercent: number }[] {
+    const snap = r.policyAcceptance?.policies?.cancellationPolicy;
+    return Array.isArray(snap) ? snap : hotel?.cancellationTiers ?? [];
   }
 
   async cancellationPreview(id: string, user: AuthUser) {
-    const { r, hotel, quote } = await this.assertCancellable(id, user);
+    const { r, tiers, quote } = await this.assertCancellable(id, user);
     return {
       bookingId: String(r._id), reference: r.reference, total: r.total, currency: r.currency, ...quote,
-      cancellationPolicy: [...(hotel?.cancellationTiers ?? [])].sort((a, b) => b.daysBefore - a.daysBefore),
+      cancellationPolicy: [...tiers].sort((a, b) => b.daysBefore - a.daysBefore),
     };
   }
 

@@ -137,6 +137,9 @@ export class AdminController {
   @Get('audit-logs')
   @ApiOperation({ summary: 'Audit log of admin actions, newest first (GEN-07)' })
   auditLogs(@Query() q: AuditQueryDto) {
+    if (q.from && q.to && parseDateOnly(q.from, 'from') > parseDateOnly(q.to, 'to')) {
+      throw new BadRequestException({ message: '"from" cannot be after "to"', field: 'from' });
+    }
     return this.audit.list({
       page: q.page,
       action: q.action,

@@ -14,6 +14,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { AuditModule } from './modules/audit/audit.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { FlightsModule } from './modules/flights/flights.module';
+import { HotelsModule } from './modules/hotels/hotels.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { FlightsModule } from './modules/flights/flights.module';
     // features
     UsersModule,
     FlightsModule,
+    HotelsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

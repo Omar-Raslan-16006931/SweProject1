@@ -17,17 +17,15 @@ Milestone 2.
 
 ## Team
 
-| Name | Student ID | Tutorial | Email |
-|---|---|---|---|
-| Omar Raslan (**team leader**) | 16006931 | P26 | omar.raslan@student.giu-uni.de |
-| Aly Hady | 10000486 | P2 | aly.elbastawisi@student.giu-uni.de |
-| Ali Essam | 10000885 | P25 | Ali.abdulmajeed@student.giu-uni.de |
-| Saeed Mahmoud | 10000885 | P3 | Saeed.saeed@student.giu-uni.de |
-| Karim Ahmed | 16006373 | P15 | kareem.abdulkarim@student.giu-uni.de |
-| Mohamed Sherif Ahmed | 16007159 | POO8 | Mohamed.sherifahmed@student.giu-uni.de |
-| Yehia Atallah | 16009960 | P18 | yehia.atallah@student.giu-uni.de |
-
-Work split for Milestone 1: [`docs/team/WORK_SPLIT.md`](docs/team/WORK_SPLIT.md).
+| Name | Student ID | Tutorial | Email | Milestone 1 module |
+|---|---|---|---|---|
+| Omar Raslan (**team leader**) | 16006931 | P26 | omar.raslan@student.giu-uni.de | Core, auth & accounts; bookings & payments; docs & tests |
+| Aly Hady | 10000486 | P2 | aly.elbastawisi@student.giu-uni.de | Airlines & flights |
+| Ali Essam | 10000885 | P25 | Ali.abdulmajeed@student.giu-uni.de | Hotels & rooms |
+| Saeed Mahmoud | 10000885 | P3 | Saeed.saeed@student.giu-uni.de | Exchange rates & reviews |
+| Karim Ahmed | 16006373 | P15 | kareem.abdulkarim@student.giu-uni.de | Itineraries & budgets |
+| Mohamed Sherif Ahmed | 16007159 | POO8 | Mohamed.sherifahmed@student.giu-uni.de | Blog & community |
+| Yehia Atallah | 16009960 | P18 | yehia.atallah@student.giu-uni.de | Admin & moderation |
 
 ---
 
@@ -56,8 +54,7 @@ SweProject1/
 ├── docs/
 │   ├── requirements/         official PDF + workbooks, TRACEABILITY.md (requirement -> endpoint)
 │   ├── api/                  ENDPOINTS.md + openapi.json
-│   ├── testing/              TEST_REPORT.md (every automated check and its result)
-│   └── team/                 WORK_SPLIT.md
+│   └── testing/              TEST_REPORT.md (every automated check and its result)
 ├── AI_PROMPTS.txt            mandatory AI prompt log (PDF 11.1)
 ├── .env.example              required environment variables (no secrets)
 └── README.md
@@ -128,7 +125,7 @@ npm run build && npm run start:prod
 ### 5. Stripe webhooks (local)
 ```bash
 stripe login
-stripe listen --forward-to localhost:3001/api/payments/webhook
+stripe listen --forward-to localhost:3001/api/payments/webhook --events payment_intent.succeeded,payment_intent.payment_failed,payment_intent.processing,payment_intent.canceled,refund.created,refund.updated,refund.failed,charge.refund.updated
 ```
 Copy the printed `whsec_...` value into `STRIPE_WEBHOOK_SECRET` and restart the backend.
 Bookings are confirmed **only** after the backend receives `payment_intent.succeeded` (PAY-01).

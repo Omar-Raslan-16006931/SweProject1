@@ -21,6 +21,3 @@ Thumbs.db
 .vscode/
 .idea/
 coverage/
-# private team-leader material (never pushed)
-_team-packages/
-_private/

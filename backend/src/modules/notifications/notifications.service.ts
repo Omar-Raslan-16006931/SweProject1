@@ -20,10 +20,19 @@ export class NotificationsService {
     await this.model.insertMany(unique.map((u) => ({ user: u, type, title, message, data })));
   }
 
-  list(userId: string, page = 1, unreadOnly = false) {
+  private serialize(n: any) {
+    return {
+      id: String(n._id), type: n.type, title: n.title, message: n.message, data: n.data ?? {},
+      read: !!n.readAt, readAt: n.readAt ?? null, createdAt: n.createdAt,
+    };
+  }
+
+  /** GEN-01: notification list, newest first, with the unread count. */
+  async list(userId: string, page = 1, unreadOnly = false) {
     const filter: any = { user: userId };
     if (unreadOnly) filter.readAt = null;
-    return paginateQuery(this.model, filter, page, { createdAt: -1 });
+    const res = await paginateQuery(this.model, filter, page, { createdAt: -1 });
+    return { ...res, items: res.items.map((n: any) => this.serialize(n)), unread: await this.model.countDocuments({ user: userId, readAt: null }) };
   }
 
   async unreadCount(userId: string) {
@@ -37,7 +46,7 @@ export class NotificationsService {
       { new: true },
     ).lean();
     if (!n) throw notFound('Notification');
-    return n;
+    return this.serialize(n);
   }
 
   async markAllRead(userId: string) {

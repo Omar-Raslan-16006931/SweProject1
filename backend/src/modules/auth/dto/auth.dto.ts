@@ -31,14 +31,18 @@ export class RegisterDto {
 }
 
 export class LoginDto {
+  // ACC-04: a malformed e-mail is answered with the same generic "Invalid email or password" as any other failure.
   @ApiProperty({ example: 'sara@example.com' })
-  @IsEmail()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(254)
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
   email: string;
 
   @ApiProperty({ example: 'Passw0rd!' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(200)
   password: string;
 }
 

@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UploadedFiles, UseInterceptors } from '@nestjs/common';
-import { ApiBody, ApiConsumes, ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiCookieAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { BlogService } from './blog.service';
-import { CommentDto, CreatePostDto, PostListQueryDto, UpdatePostDto } from './dto/blog.dto';
+import { AuthorPageQueryDto, CommentDto, CreatePostDto, PostListQueryDto, UpdatePostDto } from './dto/blog.dto';
 import { OptionalAuth, Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '../../common/enums';
@@ -137,7 +137,8 @@ export class BlogController {
   @Public()
   @Get('authors/:id')
   @ApiOperation({ summary: "Public author page: name, join date, published posts and public itineraries (BLG-12)" })
-  author(@Param('id', ParseObjectIdPipe) id: string, @Query() q: PaginationQueryDto) {
-    return this.service.author(id, q.page);
+  @ApiQuery({ name: 'itinerariesPage', required: false, type: Number, description: "Page of the author's public itineraries (default 1)" })
+  author(@Param('id', ParseObjectIdPipe) id: string, @Query() q: AuthorPageQueryDto) {
+    return this.service.author(id, q.page, q.itinerariesPage);
   }
 }

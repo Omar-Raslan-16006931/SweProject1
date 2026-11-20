@@ -27,7 +27,7 @@ export class AuditService {
     return this.model.create({ actor: actorId, action, targetType, targetId, details });
   }
 
-  list(q: { page?: number; action?: string; actorId?: string; from?: Date; to?: Date }) {
+  async list(q: { page?: number; action?: string; actorId?: string; from?: Date; to?: Date }) {
     const filter: any = {};
     if (q.action) filter.action = q.action;
     if (q.actorId) filter.actor = q.actorId;
@@ -36,6 +36,15 @@ export class AuditService {
       if (q.from) filter.createdAt.$gte = q.from;
       if (q.to) filter.createdAt.$lte = q.to;
     }
-    return paginateQuery(this.model, filter, q.page, { createdAt: -1 }, { path: 'actor', select: 'name email role' });
+    const res = await paginateQuery(this.model, filter, q.page, { createdAt: -1 }, { path: 'actor', select: 'name email role' });
+    return {
+      ...res,
+      items: res.items.map((l: any) => ({
+        id: String(l._id), action: l.action,
+        admin: l.actor ? { id: String(l.actor._id ?? l.actor), name: l.actor.name ?? null, email: l.actor.email ?? null } : null,
+        targetType: l.targetType ?? null, targetId: l.targetId ? String(l.targetId) : null,
+        details: l.details ?? {}, createdAt: l.createdAt,
+      })),
+    };
   }
 }

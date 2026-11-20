@@ -1,7 +1,7 @@
 /**
  * Required database seeding (GEN-12, FLT-02, ACC-18, PDF 5.1).
  *  - countries, cities, airports, attractions: from the OFFICIAL reference datasets (same identifiers for every team)
- *  - supported currencies (team decision: the 7 currencies used by the official Countries dataset)
+ *  - supported currencies: the currency codes listed in the official Countries dataset (PDF 5.1)
  *  - the administrator account (no admin self-registration), from ADMIN_* environment variables
  * Idempotent: safe to run multiple times. Usage: npm run seed
  */
@@ -38,13 +38,18 @@ async function main() {
     _id: r.iata_code, name: r.name, cityId: r.city_id, countryCode: r.country_code, timeZone: r.time_zone,
   }));
   const attractions = readCsv('attractions.csv').map((r) => ({ _id: r.attraction_id, name: r.name, cityId: r.city_id }));
-  const currencies = readCsv('currencies.csv').map((r) => ({ _id: r.code, name: r.name }));
+  // PDF 5.1: the supported currencies are exactly the currency codes listed in Countries.csv.
+  // currencies.csv only supplies a display name for each of those codes.
+  const currencyNames = new Map(readCsv('currencies.csv').map((r) => [r.code, r.name]));
+  const currencies = [...new Set(countries.map((c) => c.currency))].map((code) => ({ _id: code, name: currencyNames.get(code) ?? code }));
 
   console.log(`countries:   ${countries.length} (${await upsert(Country, countries)} written)`);
   console.log(`cities:      ${cities.length} (${await upsert(City, cities)} written)`);
   console.log(`airports:    ${airports.length} (${await upsert(Airport, airports)} written)`);
   console.log(`attractions: ${attractions.length} (${await upsert(Attraction, attractions)} written)`);
   console.log(`currencies:  ${currencies.length} (${await upsert(Currency, currencies)} written)`);
+  const stale = await Currency.deleteMany({ _id: { $nin: currencies.map((c) => c._id) } });
+  if (stale.deletedCount) console.log(`currencies:  removed ${stale.deletedCount} code(s) not listed in Countries.csv`);
 
   const email = (process.env.ADMIN_EMAIL ?? '').trim().toLowerCase();
   const password = process.env.ADMIN_PASSWORD ?? '';

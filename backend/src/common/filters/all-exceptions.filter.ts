@@ -39,6 +39,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
         code = body.code;
         if (body.field && !errors) errors = [{ field: body.field, messages: [message] }];
       }
+      // GEN-08: uploads outside the limits are rejected with a clear error (multer reports only "File too large").
+      if (status === HttpStatus.PAYLOAD_TOO_LARGE) message = 'Image exceeds the 5 MB limit';
     } else if (isDuplicateKeyError(exception)) {
       status = HttpStatus.CONFLICT;
       message = 'A record with the same unique value already exists';

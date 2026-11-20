@@ -12,7 +12,8 @@
     "seed": "ts-node -r tsconfig-paths/register src/database/seed.ts",
     "seed:demo": "ts-node -r tsconfig-paths/register src/database/seed-demo.ts",
     "lint": "tsc --noEmit -p tsconfig.json",
-    "export:openapi": "ts-node -r tsconfig-paths/register src/scripts/export-openapi.ts"
+    "export:openapi": "ts-node -r tsconfig-paths/register src/scripts/export-openapi.ts",
+    "test:e2e": "node test/e2e/run.js && node test/e2e/details.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",

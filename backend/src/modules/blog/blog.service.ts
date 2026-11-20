@@ -280,7 +280,7 @@ export class BlogService {
 
   // ------------------------------------------------------------------ authors (BLG-12)
 
-  async author(id: string, page = 1) {
+  async author(id: string, page = 1, itinerariesPage = 1) {
     const u = await this.users.findById(id).select('name status createdAt role').lean();
     if (!u || u.status === AccountStatus.DEACTIVATED || u.role !== Role.USER) throw notFound('Author');
     const posts = await paginateQuery(this.posts, { author: u._id, ...this.publicFilter() }, page, { publishedAt: -1 });
@@ -289,7 +289,7 @@ export class BlogService {
       name: u.name,
       joinedAt: u.createdAt,
       posts: { ...posts, items: posts.items.map((p: any) => this.summary({ ...p, author: u })) },
-      publicItineraries: await this.itineraries.publicByAuthor(String(u._id)),
+      publicItineraries: await this.itineraries.publicByAuthor(String(u._id), itinerariesPage),
     };
   }
 }

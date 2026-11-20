@@ -10,7 +10,7 @@ export class ReferenceController {
   constructor(private readonly ref: ReferenceService) {}
 
   @Get('airports')
-  @ApiOperation({ summary: 'List predefined airports (FLT-02, FLT-03, FLT-11)' })
+  @ApiOperation({ summary: 'List predefined airports (FLT-02)' })
   @ApiQuery({ name: 'cityId', required: false })
   airports(@Query('cityId') cityId?: string) {
     return this.ref.listAirports(cityId);

@@ -454,15 +454,17 @@ export class ItinerariesService {
     };
   }
 
-  private async getPublic(id: string) {
-    const it = await this.itineraries.findOne({ _id: id, ...this.publicFilter() });
-    if (!it) throw notFound('Itinerary');
+  /** Public itinerary; GEN-10: content hidden by moderation stays visible to its author and to admins. */
+  private async getPublic(id: string, viewer?: AuthUser) {
+    const it = await this.itineraries.findById(id);
+    if (!it || it.visibility !== Visibility.PUBLIC || it.authorDeactivated) throw notFound('Itinerary');
+    if (it.hidden && viewer?.role !== Role.ADMIN && String(it.owner) !== viewer?.id) throw notFound('Itinerary');
     return it;
   }
 
   async viewPublic(id: string, viewer?: AuthUser, currency?: string) {
-    const it = await this.getPublic(id);
-    const view: any = await this.serialize(it);
+    const it = await this.getPublic(id, viewer);
+    const view: any = await this.serialize(it, { includeOwnerFields: it.hidden });
     const target = await this.ref.assertCurrency(currency ?? (await this.preferredCurrency(viewer)), 'currency');
     try {
       const table = await this.fx.getRates();
@@ -574,9 +576,13 @@ export class ItinerariesService {
 
   // ------------------------------------------------------------------ used by admin/blog
 
-  async publicByAuthor(authorId: string) {
-    const list = await this.itineraries.find({ owner: authorId, ...this.publicFilter() }).sort({ updatedAt: -1 }).lean();
-    return list.map((it) => ({ id: String(it._id), title: it.title, countries: it.countries, days: it.days.length, startDate: formatDateOnly(it.startDate) }));
+  /** BLG-12: an author's public itineraries (paginated, GEN-05). */
+  async publicByAuthor(authorId: string, page = 1) {
+    const res = await paginateQuery(this.itineraries, { owner: authorId, ...this.publicFilter() }, page, { updatedAt: -1 });
+    return {
+      ...res,
+      items: res.items.map((it: any) => ({ id: String(it._id), title: it.title, countries: it.countries, days: it.days.length, startDate: formatDateOnly(it.startDate) })),
+    };
   }
 
   isAdmin(user?: AuthUser) {

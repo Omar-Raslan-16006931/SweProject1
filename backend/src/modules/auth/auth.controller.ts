@@ -13,7 +13,7 @@ export class AuthController {
 
   @Public()
   @Post('register')
-  @ApiOperation({ summary: 'Register a new traveler account (ACC-01, ACC-03)' })
+  @ApiOperation({ summary: 'Register a new traveler account (ACC-01)' })
   register(@Body() dto: RegisterDto) {
     return this.auth.register(dto);
   }
@@ -53,7 +53,7 @@ export class AuthController {
   @Get('me')
   @AllowPasswordChangePending()
   @ApiCookieAuth('access_token')
-  @ApiOperation({ summary: 'Current authenticated user (ACC-04, ACC-11, ACC-19)' })
+  @ApiOperation({ summary: 'Current authenticated user (ACC-04, ACC-19)' })
   me(@CurrentUser() user: AuthUser) {
     return this.auth.me(user.id);
   }

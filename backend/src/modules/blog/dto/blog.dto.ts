@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { ArrayMaxSize, IsArray, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { PostStatus } from '../../../common/enums';
 import { PaginationQueryDto } from '../../../common/dto/pagination.dto';
 
@@ -44,4 +44,11 @@ export class PostListQueryDto extends PaginationQueryDto {
   @ApiPropertyOptional({ example: 'cairo', description: 'Keyword in title, tags or author name; ordered by interaction score (BLG-09)' })
   @IsOptional() @IsString() @MaxLength(100)
   q?: string;
+}
+
+/** BLG-12: the author page paginates posts (page) and public itineraries (itinerariesPage) separately. */
+export class AuthorPageQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1)
+  itinerariesPage?: number = 1;
 }

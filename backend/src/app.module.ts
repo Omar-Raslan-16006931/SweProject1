@@ -22,6 +22,8 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { ItinerariesModule } from './modules/itineraries/itineraries.module';
 import { BlogModule } from './modules/blog/blog.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -49,6 +51,8 @@ import { BlogModule } from './modules/blog/blog.module';
     PaymentsModule,
     ItinerariesModule,
     BlogModule,
+    ReportsModule,
+    AdminModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

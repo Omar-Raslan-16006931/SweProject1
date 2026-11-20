@@ -31,8 +31,7 @@ feature branches and pull requests into develop. Credentials were NOT shared wit
 Atlas URI and Stripe keys are entered locally in .env only (section 11.2 d).
 ================================================
 
-================================================
-Date: 2026-11-20
+=========================================Date: 2026-11-20
 Student: Saeed Mahmoud
 Tool: Claude desktop app + Claude (Anthropic, module code prepared in the team leader's session)
 Related Requirement: ITN-18, HTL-23, HTL-24
@@ -53,3 +52,20 @@ Prompt:
 How the output was used:
 I applied the patch (the 4 itineraries files) and registered ItinerariesModule in app.module.ts by hand because the patch did not apply cleanly to develop. I committed in 3 commits. I have not built or tested it in Swagger yet because packages 2-5 (flights, hotels, payments, reviews/exchange rates) are not in develop yet; the team leader will integrate it. I will test the endpoints in Swagger after they are merged.
 ================================================
+=======
+Date: 2026-11-08
+
+Tool: ChatGPT (OpenAI) and GitHub Copilot (VS Code)
+
+Prompt 1 (ChatGPT):
+"Unzip this package and follow AI_AGENT_INSTRUCTIONS.md inside it exactly, step by step. Stop and ask me if any check fails. Do not change the code."
+
+Prompt 2 (GitHub Copilot):
+"In backend/src/app.module.ts, add the import for BlogModule and add BlogModule to the @Module imports array immediately after UsersModule. Do not remove, rewrite, or modify any other code."
+
+How I used the AI output:
+I used ChatGPT to guide me step by step through integrating Package 7 (Blog & Community), troubleshooting build errors, creating a Git feature branch, and preparing a pull request.
+
+I used GitHub Copilot to register BlogModule in app.module.ts. I reviewed the changes, committed my Blog module, and pushed the branch to GitHub.
+
+The build currently has two errors caused by missing itinerary module and service files.

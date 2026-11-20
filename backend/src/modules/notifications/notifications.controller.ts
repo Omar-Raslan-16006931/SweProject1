@@ -1,9 +1,18 @@
 import { Controller, Get, Param, Patch, Query } from '@nestjs/common';
-import { ApiCookieAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiCookieAuth, ApiOperation, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import { IsIn, IsOptional } from 'class-validator';
 import { NotificationsService } from './notifications.service';
 import { AuthUser, CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { ParseObjectIdPipe } from '../../common/pipes/parse-object-id.pipe';
+
+/** GEN-01 list query: page + optional unread-only filter. */
+export class NotificationsQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional({ enum: ['true', 'false'], description: 'Only unread notifications' })
+  @IsOptional()
+  @IsIn(['true', 'false'], { message: 'unreadOnly must be true or false' })
+  unreadOnly?: 'true' | 'false';
+}
 
 @ApiTags('Notifications')
 @ApiCookieAuth('access_token')
@@ -13,9 +22,8 @@ export class NotificationsController {
 
   @Get()
   @ApiOperation({ summary: 'List my in-app notifications, newest first (GEN-01, GEN-05)' })
-  @ApiQuery({ name: 'unreadOnly', required: false, type: Boolean })
-  list(@CurrentUser() user: AuthUser, @Query() q: PaginationQueryDto, @Query('unreadOnly') unreadOnly?: string) {
-    return this.service.list(user.id, q.page, unreadOnly === 'true');
+  list(@CurrentUser() user: AuthUser, @Query() q: NotificationsQueryDto) {
+    return this.service.list(user.id, q.page, q.unreadOnly === 'true');
   }
 
   @Get('unread-count')

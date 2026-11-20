@@ -5,6 +5,9 @@ import { Transform } from 'class-transformer';
 /** ACC-01 password rule: >= 8 characters with at least one letter and one digit. */
 export const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 export const PASSWORD_MESSAGE = 'Password must have at least 8 characters, including at least one letter and one digit';
+/** bcrypt only uses the first 72 bytes, so longer passwords are refused instead of being silently truncated. */
+export const PASSWORD_MAX = 72;
+export const PASSWORD_MAX_MESSAGE = `Password must be at most ${PASSWORD_MAX} characters`;
 
 export class RegisterDto {
   @ApiProperty({ example: 'Sara Ali' })
@@ -21,6 +24,7 @@ export class RegisterDto {
 
   @ApiProperty({ example: 'Passw0rd!', description: PASSWORD_MESSAGE })
   @IsString()
+  @MaxLength(PASSWORD_MAX, { message: PASSWORD_MAX_MESSAGE })
   @Matches(PASSWORD_REGEX, { message: PASSWORD_MESSAGE })
   password: string;
 
@@ -54,6 +58,7 @@ export class ChangePasswordDto {
 
   @ApiProperty({ description: PASSWORD_MESSAGE })
   @IsString()
+  @MaxLength(PASSWORD_MAX, { message: PASSWORD_MAX_MESSAGE })
   @Matches(PASSWORD_REGEX, { message: PASSWORD_MESSAGE })
   newPassword: string;
 }
@@ -62,6 +67,7 @@ export class TemporaryPasswordDto {
   @ApiProperty({ description: `Temporary password set by the admin. ${PASSWORD_MESSAGE}` })
   @IsString()
   @MinLength(8)
+  @MaxLength(PASSWORD_MAX, { message: PASSWORD_MAX_MESSAGE })
   @Matches(PASSWORD_REGEX, { message: PASSWORD_MESSAGE })
   temporaryPassword: string;
 }

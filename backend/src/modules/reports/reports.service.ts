@@ -21,7 +21,7 @@ export class ReportsService {
   /** GEN-09: report a post, comment, review or itinerary with a reason, at most once per item. */
   async create(dto: CreateReportDto, user: AuthUser) {
     const doc = await this.moderation.get(dto.targetType, dto.targetId);
-    if (!this.moderation.isReportable(dto.targetType, doc)) throw notFound('Content');
+    if (!(await this.moderation.isReportable(dto.targetType, doc))) throw notFound('Content');
     if (this.moderation.ownerOf(dto.targetType, doc) === user.id) {
       throw new BadRequestException({ message: 'You cannot report your own content' });
     }

@@ -101,19 +101,26 @@ export class AuthService {
       );
     }
 
+    const lockedError = () =>
+      new HttpException(
+        { message: `Account locked for ${LOCK_MINUTES} minutes after ${MAX_FAILED_ATTEMPTS} failed login attempts.`, code: 'ACCOUNT_LOCKED' },
+        HttpStatus.LOCKED,
+      );
     const ok = await bcrypt.compare(dto.password, user.passwordHash);
     if (!ok) {
-      user.failedLoginAttempts = (user.failedLoginAttempts ?? 0) + 1;
-      if (user.failedLoginAttempts >= MAX_FAILED_ATTEMPTS) {
-        user.failedLoginAttempts = 0;
-        user.lockUntil = new Date(now.getTime() + LOCK_MINUTES * 60000);
-        await user.save();
-        throw new HttpException(
-          { message: `Account locked for ${LOCK_MINUTES} minutes after ${MAX_FAILED_ATTEMPTS} failed login attempts.`, code: 'ACCOUNT_LOCKED' },
-          HttpStatus.LOCKED,
+      // ACC-05: atomic counter, so parallel wrong-password requests cannot bypass the lock.
+      const counted = await this.users.findOneAndUpdate(
+        { _id: user._id },
+        { $inc: { failedLoginAttempts: 1 } },
+        { new: true, projection: { failedLoginAttempts: 1 } },
+      );
+      if ((counted?.failedLoginAttempts ?? 0) >= MAX_FAILED_ATTEMPTS) {
+        await this.users.updateOne(
+          { _id: user._id },
+          { $set: { failedLoginAttempts: 0, lockUntil: new Date(Date.now() + LOCK_MINUTES * 60000) } },
         );
+        throw lockedError();
       }
-      await user.save();
       throw invalid();
     }
 
@@ -124,11 +131,12 @@ export class AuthService {
       throw new ForbiddenException({ message: 'Account deactivated', code: 'ACCOUNT_DEACTIVATED' });
     }
 
-    // ACC-05: a successful login resets the counter.
-    user.failedLoginAttempts = 0;
-    user.lockUntil = undefined;
-    user.lastLoginAt = now;
-    await user.save();
+    // ACC-05: a successful login resets the counter, unless a parallel failure has just locked the account.
+    const reset = await this.users.updateOne(
+      { _id: user._id, $or: [{ lockUntil: null }, { lockUntil: { $lte: new Date() } }] },
+      { $set: { failedLoginAttempts: 0, lastLoginAt: now }, $unset: { lockUntil: 1 } },
+    );
+    if (!reset.matchedCount) throw lockedError();
 
     await this.startSession(user, res, userAgent);
     return this.publicUser(user);

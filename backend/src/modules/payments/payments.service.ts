@@ -12,7 +12,7 @@ import { AuthUser } from '../../common/decorators/current-user.decorator';
 import {
   BookingStatus, BookingType, NotificationType, PaymentStatus, PLATFORM_CURRENCY, RefundStatus, Role,
 } from '../../common/enums';
-import { notFound } from '../../common/utils/errors';
+import { isDuplicateKeyError, notFound } from '../../common/utils/errors';
 import { money, toCents } from '../../common/utils/refund';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreatePaymentDto } from './dto/payment.dto';
@@ -83,43 +83,86 @@ export class PaymentsService {
     return { handler, booking: b };
   }
 
+  /**
+   * Creates the payment record first (the unique "one active payment per booking" index makes concurrent
+   * clicks lose here, before any Stripe call), then the PaymentIntent. Returns null when another request won.
+   */
   private async createIntent(type: BookingType, booking: { id: string; amount: number; currency: string; userId: string }) {
-    const intent = await this.stripe.client.paymentIntents.create({
-      amount: toCents(booking.amount),
-      currency: booking.currency.toLowerCase(),
-      automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
-      metadata: { bookingType: type, bookingId: booking.id, userId: booking.userId },
-      description: `${type === BookingType.FLIGHT ? 'Flight booking' : 'Hotel reservation'} ${booking.id}`,
-    });
-    const payment = await this.payments.create({
-      user: booking.userId,
-      bookingType: type,
-      booking: booking.id,
-      stripePaymentIntentId: intent.id,
-      amount: booking.amount,
-      currency: booking.currency,
-      status: this.mapIntentStatus(intent.status),
-    });
-    return { payment, intent };
+    let payment;
+    try {
+      payment = await this.payments.create({
+        user: booking.userId,
+        bookingType: type,
+        booking: booking.id,
+        stripePaymentIntentId: `pending_${new Types.ObjectId().toString()}`,
+        amount: booking.amount,
+        currency: booking.currency,
+        status: PaymentStatus.REQUIRES_PAYMENT,
+      });
+    } catch (e) {
+      if (isDuplicateKeyError(e)) return null;
+      throw e;
+    }
+    try {
+      const intent = await this.stripe.client.paymentIntents.create(
+        {
+          amount: toCents(booking.amount),
+          currency: booking.currency.toLowerCase(),
+          automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
+          metadata: { bookingType: type, bookingId: booking.id, userId: booking.userId, paymentId: String(payment._id) },
+          description: `${type === BookingType.FLIGHT ? 'Flight booking' : 'Hotel reservation'} ${booking.id}`,
+        },
+        { idempotencyKey: `payment-${payment._id}` },
+      );
+      payment.stripePaymentIntentId = intent.id;
+      payment.status = this.mapIntentStatus(intent.status);
+      await payment.save();
+      return { payment, intent };
+    } catch (e) {
+      await payment.deleteOne();
+      throw e;
+    }
+  }
+
+  /** Waits for the payment another concurrent request is creating, then returns it with its client secret. */
+  private async awaitConcurrentPayment(type: BookingType, bookingId: string) {
+    for (let i = 0; i < 50; i++) {
+      const p = await this.payments.findOne({ bookingType: type, booking: bookingId, active: true });
+      if (!p) return null;
+      if (!p.stripePaymentIntentId.startsWith('pending_')) {
+        const intent = await this.stripe.client.paymentIntents.retrieve(p.stripePaymentIntentId);
+        return { payment: p, intent };
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    throw new ConflictException({ message: 'A payment for this booking is already being created; please retry', code: 'PAYMENT_IN_PROGRESS' });
   }
 
   /** PAY-01: start (or resume) payment of a Pending Payment booking; returns the client secret for Stripe Elements. */
   async create(dto: CreatePaymentDto, user: AuthUser) {
     const { handler, booking } = await this.assertPayable(dto.bookingType, dto.bookingId, user);
-    const existing = await this.payments
-      .findOne({ bookingType: dto.bookingType, booking: dto.bookingId, status: { $in: ACTIVE_PAYMENT } })
-      .sort({ createdAt: -1 });
-    if (existing) {
-      const intent = await this.stripe.client.paymentIntents.retrieve(existing.stripePaymentIntentId);
-      if (intent.status !== 'canceled' && intent.status !== 'succeeded') {
-        return this.serialize(existing, intent.client_secret, booking.holdExpiresAt);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const existing = await this.payments
+        .findOne({ bookingType: dto.bookingType, booking: dto.bookingId, status: { $in: ACTIVE_PAYMENT } })
+        .sort({ createdAt: -1 });
+      if (existing && !existing.stripePaymentIntentId.startsWith('pending_')) {
+        const intent = await this.stripe.client.paymentIntents.retrieve(existing.stripePaymentIntentId);
+        if (intent.status !== 'canceled' && intent.status !== 'succeeded') {
+          return this.serialize(existing, intent.client_secret, booking.holdExpiresAt);
+        }
+        existing.status = this.mapIntentStatus(intent.status);
+        await existing.save();
       }
-      existing.status = this.mapIntentStatus(intent.status);
-      await existing.save();
+      const created = existing?.stripePaymentIntentId.startsWith('pending_') ? null : await this.createIntent(dto.bookingType, booking);
+      if (created) {
+        await handler.attachPayment(booking.id, String(created.payment._id));
+        return this.serialize(created.payment, created.intent.client_secret, booking.holdExpiresAt);
+      }
+      // Another click is creating the PaymentIntent right now: return that one instead of a second charge.
+      const other = await this.awaitConcurrentPayment(dto.bookingType, dto.bookingId);
+      if (other) return this.serialize(other.payment, other.intent.client_secret, booking.holdExpiresAt);
     }
-    const { payment, intent } = await this.createIntent(dto.bookingType, booking);
-    await handler.attachPayment(booking.id, String(payment._id));
-    return this.serialize(payment, intent.client_secret, booking.holdExpiresAt);
+    throw new ConflictException({ message: 'Could not start the payment; please retry', code: 'PAYMENT_IN_PROGRESS' });
   }
 
   private async getOwned(id: string, user: AuthUser) {
@@ -143,7 +186,8 @@ export class PaymentsService {
     }
     p.status = PaymentStatus.CANCELED;
     await p.save();
-    const created = await this.createIntent(p.bookingType, booking);
+    const created = (await this.createIntent(p.bookingType, booking)) ?? (await this.awaitConcurrentPayment(p.bookingType, String(p.booking)));
+    if (!created) throw new ConflictException({ message: 'Could not restart the payment; please retry', code: 'PAYMENT_IN_PROGRESS' });
     await handler.attachPayment(booking.id, String(created.payment._id));
     return this.serialize(created.payment, created.intent.client_secret, booking.holdExpiresAt);
   }
@@ -194,19 +238,19 @@ export class PaymentsService {
       case 'payment_intent.payment_failed':
         await this.payments.updateOne(
           { stripePaymentIntentId: (event.data.object as Stripe.PaymentIntent).id, status: { $ne: PaymentStatus.SUCCEEDED } },
-          { $set: { status: PaymentStatus.FAILED } },
+          { $set: { status: PaymentStatus.FAILED, active: false } },
         );
         break;
       case 'payment_intent.processing':
         await this.payments.updateOne(
           { stripePaymentIntentId: (event.data.object as Stripe.PaymentIntent).id },
-          { $set: { status: PaymentStatus.PROCESSING } },
+          { $set: { status: PaymentStatus.PROCESSING, active: true } },
         );
         break;
       case 'payment_intent.canceled':
         await this.payments.updateOne(
           { stripePaymentIntentId: (event.data.object as Stripe.PaymentIntent).id },
-          { $set: { status: PaymentStatus.CANCELED } },
+          { $set: { status: PaymentStatus.CANCELED, active: false } },
         );
         break;
       case 'refund.created':
@@ -233,6 +277,18 @@ export class PaymentsService {
     await p.save();
     const handler = this.registry.get(p.bookingType);
     const result = await handler.onPaymentSucceeded(String(p.booking), String(p._id));
+    const confirmedBy = result === 'already' ? (await handler.getPayable(String(p.booking)).catch(() => null))?.paymentId : undefined;
+    if (result === 'already' && confirmedBy && confirmedBy !== String(p._id)) {
+      // A second payment succeeded for a booking that another payment already confirmed: never keep it.
+      const done = await this.refunds.exists({ payment: p._id });
+      if (!done) {
+        await this.issueRefund({
+          bookingType: p.bookingType, bookingId: String(p.booking), userId: String(p.user), amount: p.amount, percent: 100,
+          reason: 'Duplicate payment for an already confirmed booking', paymentId: String(p._id),
+        });
+      }
+      return;
+    }
     if (result === 'not_pending') {
       // Paid after the hold expired (or booking no longer pending): the booking stays
       // unconfirmed, so the money is returned in full (PDF 6.4).

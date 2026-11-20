@@ -15,8 +15,15 @@ export class Payment {
   @Prop({ required: true }) amount: number;
   @Prop({ required: true }) currency: string;
   @Prop({ type: String, enum: PaymentStatus, default: PaymentStatus.REQUIRES_PAYMENT }) status: PaymentStatus;
+  /** True while the payment can still be completed (requires_payment / processing). */
+  @Prop({ default: true }) active: boolean;
 }
 export const PaymentSchema = SchemaFactory.createForClass(Payment);
+/** PAY-01: at most one open PaymentIntent per booking, even when "Pay" is clicked many times at once. */
+PaymentSchema.index({ bookingType: 1, booking: 1 }, { unique: true, partialFilterExpression: { active: true }, name: 'one_active_payment_per_booking' });
+PaymentSchema.pre('save', function () {
+  this.active = this.status === PaymentStatus.REQUIRES_PAYMENT || this.status === PaymentStatus.PROCESSING;
+});
 
 /** PAY-03 refund record. */
 @Schema({ collection: 'refunds', timestamps: true })

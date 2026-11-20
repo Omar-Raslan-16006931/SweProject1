@@ -12,6 +12,8 @@ export interface PayableBooking {
   holdExpiresAt?: Date;
   policyAccepted: boolean;
   reference?: string;
+  /** Payment linked to the booking (the one that confirmed it, once Confirmed). */
+  paymentId?: string;
 }
 
 /**

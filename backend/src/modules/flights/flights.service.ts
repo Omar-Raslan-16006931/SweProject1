@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Model, Types } from 'mongoose';
@@ -7,9 +7,10 @@ import { Airline } from './schemas/airline.schema';
 import { FlightBooking } from '../flight-bookings/schemas/flight-booking.schema';
 import { CabinDto, CreateFlightDto, FlightSearchDto, UpdateCabinDto, UpdateFlightDto } from './dto/flight.dto';
 import { AuthUser } from '../../common/decorators/current-user.decorator';
-import { BookingStatus, CabinClass, FlightStatus, NotificationType } from '../../common/enums';
+import { BookingStatus, CabinClass, FlightStatus, LIMITS, NotificationType } from '../../common/enums';
 import { conflict, forbidden, isDuplicateKeyError, notFound } from '../../common/utils/errors';
-import { localDateOf, localToUtc, utcToLocalIso } from '../../common/utils/dates';
+import { DateTime } from 'luxon';
+import { localDateOf, localToUtc, parseDateOnly, utcToLocalIso } from '../../common/utils/dates';
 import { paginateArray, paginateQuery } from '../../common/utils/pagination';
 import { ReferenceService } from '../reference/reference.service';
 import { AirlinesService } from './airlines.service';
@@ -89,6 +90,12 @@ export class FlightsService {
     }
     if (departureUtc.getTime() <= Date.now()) {
       throw new BadRequestException({ message: 'Departure cannot be in the past', field: 'departureLocal' });
+    }
+    if (arrivalUtc.getTime() - departureUtc.getTime() > LIMITS.MAX_FLIGHT_HOURS * 3600000) {
+      throw new BadRequestException({ message: `A flight cannot last more than ${LIMITS.MAX_FLIGHT_HOURS} hours`, field: 'arrivalLocal' });
+    }
+    if (departureUtc.getTime() > DateTime.utc().plus({ years: LIMITS.MAX_SCHEDULE_YEARS_AHEAD }).toMillis()) {
+      throw new BadRequestException({ message: `Flights can be scheduled at most ${LIMITS.MAX_SCHEDULE_YEARS_AHEAD} years ahead`, field: 'departureLocal' });
     }
   }
 
@@ -173,6 +180,7 @@ export class FlightsService {
 
     const timeChanged =
       departureTime.getTime() !== f.departureTime.getTime() || arrivalTime.getTime() !== f.arrivalTime.getTime();
+    if (timeChanged) await this.assertRoundTripsStayOrdered(f._id, departureTime, arrivalTime);
 
     f.departureAirport = dep._id;
     f.arrivalAirport = arr._id;
@@ -204,6 +212,27 @@ export class FlightsService {
       );
     }
     return this.serialize(f);
+  }
+
+  /** A booked round trip must keep "return departs after outbound arrives" when either flight is rescheduled. */
+  private async assertRoundTripsStayOrdered(flightId: Types.ObjectId, departureTime: Date, arrivalTime: Date) {
+    const trips = await this.bookings
+      .find({ 'segments.flight': flightId, tripType: 'round-trip', status: { $in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT] } })
+      .select('segments reference')
+      .lean();
+    for (const b of trips) {
+      const seg = (dir: string) => b.segments.find((s) => s.direction === dir)!;
+      const out = seg('outbound');
+      const ret = seg('return');
+      const outArr = String(out.flight) === String(flightId) ? arrivalTime : out.arrivalTime;
+      const retDep = String(ret.flight) === String(flightId) ? departureTime : ret.departureTime;
+      if (retDep.getTime() <= outArr.getTime()) {
+        throw new ConflictException({
+          message: `This change would make the return flight depart before the outbound arrives for booked round trip ${b.reference ?? String(b._id)}`,
+          code: 'ROUND_TRIP_ORDER',
+        });
+      }
+    }
   }
 
   private async resyncBookingDates(flightId: Types.ObjectId) {
@@ -327,8 +356,19 @@ export class FlightsService {
   /** FLT-11 / FLT-12 / FLT-15 */
   async search(q: FlightSearchDto) {
     if (q.from === q.to) throw new BadRequestException({ message: 'Departure and arrival airports must be different', field: 'to' });
-    await this.ref.getAirport(q.from, 'from');
-    await this.ref.getAirport(q.to, 'to');
+    const fromAirport = await this.ref.getAirport(q.from, 'from');
+    const toAirport = await this.ref.getAirport(q.to, 'to');
+    // FLT-11: real calendar dates only, and not before "today" at the departure airport (its local date).
+    parseDateOnly(q.date, 'date');
+    if (q.date < (DateTime.now().setZone(fromAirport.timeZone).toISODate() as string)) {
+      throw new BadRequestException({ message: 'Departure date cannot be in the past', field: 'date' });
+    }
+    if (q.returnDate) {
+      parseDateOnly(q.returnDate, 'returnDate');
+      if (q.returnDate < (DateTime.now().setZone(toAirport.timeZone).toISODate() as string)) {
+        throw new BadRequestException({ message: 'Return date cannot be in the past', field: 'returnDate' });
+      }
+    }
     if (q.minPrice !== undefined && q.maxPrice !== undefined && q.minPrice > q.maxPrice) {
       throw new BadRequestException({ message: 'Minimum price cannot be greater than maximum price', field: 'minPrice' });
     }

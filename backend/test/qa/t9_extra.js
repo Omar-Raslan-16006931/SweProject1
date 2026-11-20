@@ -1,0 +1,132 @@
+const { Client, check, setSection, dbc, D, L, u, ObjectId, newUser, pay, sendWebhook, isoDate } = require('./lib');
+const { mkFlight, ECO } = require('./t3_flights');
+const { adult } = require('./t4_fbook');
+
+module.exports = async function extra(ctx) {
+  const mod = ctx.airMod; const admin = ctx.admin; const db = await dbc(); const g = new Client(); let r;
+
+  setSection('Extra — payments edge cases');
+  const F = (await mkFlight(mod, { from: 'CAI', to: 'HND', dep: L(45, '10:00'), arr: L(46, '06:00'), cabins: [ECO(10, 500)] })).data;
+  const t = await newUser('Edge Payer');
+  const b = (await t.post('/flight-bookings/hold', { outboundFlightId: F.id, outboundCabinClass: 'Economy', passengers: [adult()] })).data;
+  await t.post(`/bookings/flight/${b.id}/accept-policies`);
+  const p = (await t.post('/payments', { bookingType: 'flight', bookingId: b.id })).data;
+  await sendWebhook('payment_intent.payment_failed', { id: p.stripePaymentIntentId, object: 'payment_intent', status: 'requires_payment_method' });
+  r = await t.get(`/payments/${p.id}`);
+  check('PAY-01', 'payment_failed webhook marks payment failed with a retry message', r.data.status === 'failed' && /retry/i.test(r.data.message ?? ''), r.data);
+  r = await t.get(`/flight-bookings/${b.id}`);
+  check('PAY-01', 'booking stays Pending Payment after failure', r.data.status === 'Pending Payment', r.data.status);
+  r = await t.post(`/payments/${p.id}/retry`);
+  check('PAY-01', 'retry after failure returns a usable client secret', r.status === 200 && !!r.data.clientSecret, r.status);
+  r = await t.get(`/bookings/hotel/${b.id}/policies`);
+  check('PAY-02', 'flight booking id under hotel type -> 404', r.status === 404, r.status);
+  r = await admin.post('/payments', { bookingType: 'flight', bookingId: b.id });
+  check('PAY-01', 'admin cannot pay for users', r.status === 403, r.status);
+  await t.post(`/payments/${p.id}/test-confirm`, {});
+  await sendWebhook('payment_intent.succeeded', { id: p.stripePaymentIntentId, object: 'payment_intent', status: 'succeeded' });
+  r = await t.get(`/flight-bookings/${b.id}`);
+  check('PAY-01', 'payment succeeds on retry -> Confirmed', r.data.status === 'Confirmed', r.data.status);
+  // Completed bookings
+  await db.collection('flight_bookings').updateOne({ _id: new ObjectId(b.id) }, { $set: { 'segments.0.departureTime': new Date(Date.now() - 86400000), travelDate: new Date(Date.now() - 86400000), lastDepartureTime: new Date(Date.now() - 86400000) } });
+  r = await t.get(`/flight-bookings/${b.id}`);
+  check('GEN-11', 'Confirmed flight booking becomes Completed after departure', r.data.status === 'Completed', r.data.status);
+  r = await t.post(`/flight-bookings/${b.id}/cancel`);
+  check('GEN-11', 'Completed booking cannot be cancelled', r.status === 409, r.status);
+  r = await t.get('/flight-bookings?group=past');
+  check('FLT-25', 'completed booking listed under Past', r.data.items.some((x) => x.id === b.id), null);
+  r = await t.get(`/flight-bookings/${b.id}/e-ticket`);
+  check('FLT-23', 'e-ticket still downloadable for a Completed booking', r.status === 200, r.status);
+
+  setSection('Extra — same-day flights');
+  const now = new Date(); const cairoNow = new Date(now.getTime() + 2 * 3600000);
+  const later = new Date(cairoNow.getTime() + 3 * 3600000).toISOString().slice(0, 16);
+  const later2 = new Date(cairoNow.getTime() + 7 * 3600000).toISOString().slice(0, 16);
+  const today = isoDate(cairoNow);
+  r = await mkFlight(mod, { from: 'CAI', to: 'FRA', dep: later, arr: later2, cabins: [ECO(5, 100)] });
+  const Ftoday = r.data;
+  check('FLT-03', 'flight departing later today can be created', r.status === 201, r.data);
+  if (later.slice(0, 10) === today) {
+    r = await g.get('/flights/search?' + new URLSearchParams({ from: 'CAI', to: 'FRA', date: today }));
+    check('FLT-11', "searching today's local date works and lists later-today flights", r.status === 200 && r.data.outbound.items.some((f) => f.id === Ftoday.id), r.status);
+  }
+  r = await t.post('/flight-bookings/hold', { outboundFlightId: Ftoday.id, outboundCabinClass: 'Economy', passengers: [adult()] });
+  check('FLT-22', 'same-day flight bookable; hold capped at departure if sooner', r.status === 201 && new Date(r.data.holdExpiresAt) <= new Date(Date.now() + 10 * 60000 + 2000), r.data?.holdExpiresAt);
+
+  setSection('Extra — auth corner cases');
+  const s = await newUser('Soon Suspended');
+  const rt = s.cookies.refresh_token;
+  await admin.patch(`/admin/accounts/${s.id}/suspend`);
+  const rc = new Client(); rc.cookies.refresh_token = rt;
+  r = await rc.post('/auth/refresh');
+  check('ACC-16', 'suspended user cannot refresh a session', r.status === 401, r.status);
+  const m = new Client();
+  const fu = await newUser('Temp pw user');
+  await admin.post(`/admin/users/${fu.id}/reset-password`, { temporaryPassword: 'Temp12345' });
+  await m.login(fu.email, 'Temp12345');
+  r = await m.post('/auth/logout');
+  check('ACC-06', 'user with pending password change can still log out', r.status === 200, r.status);
+  r = await admin.post('/flight-bookings/hold', { outboundFlightId: F.id, outboundCabinClass: 'Economy', passengers: [adult()] });
+  check('ACC-11', 'admin cannot book flights', r.status === 403, r.status);
+  r = await ctx.airMod.post('/hotel-bookings', { hotelId: ctx.hotel.id, checkIn: D(80), checkOut: D(81), rooms: [{ roomId: ctx.R['102'].id, adults: 1 }] });
+  check('ACC-11', 'airline moderator cannot book hotels', r.status === 403, r.status);
+
+  setSection('Extra — reviews & content visibility');
+  const hu = await newUser('Leaving Reviewer');
+  const res = (await hu.post('/hotel-bookings', { hotelId: ctx.hotel.id, checkIn: D(82), checkOut: D(83), rooms: [{ roomId: ctx.R['101'].id, adults: 1 }] })).data;
+  r = await hu.post(`/hotel-bookings/${res.id}/review`, { rating: 5 });
+  check('HTL-23', 'Pending Payment reservation cannot be reviewed', r.status === 409, r.status);
+  await pay(hu, 'hotel', res.id);
+  await db.collection('hotel_reservations').updateOne({ _id: new ObjectId(res.id) }, { $set: { checkIn: new Date(D(-4)), checkOut: new Date(D(-3)) } });
+  const rev = (await hu.post(`/hotel-bookings/${res.id}/review`, { rating: 2, text: 'meh' })).data;
+  r = await hu.del('/users/me');
+  check('ACC-12', 'user with only past stays can deactivate', r.status === 200, r.status);
+  r = await g.get(`/hotels/${ctx.hotel.id}/reviews`);
+  const rr = r.data.items.find((x) => x.id === rev?.id);
+  check('ACC-12', "deactivated user's review shown as 'Deleted user'", rr && rr.author.name === 'Deleted user', rr);
+  const cx = await newUser('Cancelled Stay');
+  const cres = (await cx.post('/hotel-bookings', { hotelId: ctx.hotel.id, checkIn: D(84), checkOut: D(85), rooms: [{ roomId: ctx.R['101'].id, adults: 1 }] })).data;
+  await pay(cx, 'hotel', cres.id);
+  await cx.post(`/hotel-bookings/${cres.id}/cancel`);
+  await db.collection('hotel_reservations').updateOne({ _id: new ObjectId(cres.id) }, { $set: { checkIn: new Date(D(-4)), checkOut: new Date(D(-3)) } });
+  r = await cx.post(`/hotel-bookings/${cres.id}/review`, { rating: 1 });
+  check('HTL-23', 'cancelled reservation cannot be reviewed even after its dates', r.status === 409, r.status);
+  // hidden post cannot be liked/commented/reported
+  const au = await newUser('Hidden Author'); const rd = await newUser('Hidden Reader');
+  const hp = (await au.post('/posts', { title: 'to hide', body: 'b', status: 'Published' })).data;
+  await admin.patch(`/admin/content/post/${hp.id}/visibility`, { hidden: true });
+  r = await rd.post(`/posts/${hp.id}/like`);
+  check('GEN-10', 'hidden post cannot be liked', r.status === 404, r.status);
+  r = await rd.post(`/posts/${hp.id}/comments`, { body: 'hi' });
+  check('GEN-10', 'hidden post cannot be commented', r.status === 404, r.status);
+  r = await rd.post('/reports', { targetType: 'post', targetId: hp.id, reason: 'x' });
+  check('GEN-09', 'hidden post cannot be reported again', r.status === 404, r.status);
+  r = await au.patch(`/posts/${hp.id}`, { status: 'Draft' });
+  r = await au.patch(`/posts/${hp.id}`, { status: 'Published' });
+  r = await g.get(`/posts/${hp.id}`);
+  check('GEN-10', 'author cannot un-hide moderated content by re-publishing', r.status === 404, r.status);
+
+  setSection('Extra — exchange rate gaps');
+  const iu = await newUser('FX user');
+  const it = (await iu.post('/itineraries', { title: 'FX', countries: ['JP'], startDate: D(30) })).data;
+  const d = (await iu.post(`/itineraries/${it.id}/days`, { cityId: 'tokyo' })).data.days[0];
+  await iu.post(`/itineraries/${it.id}/days/${d.id}/budgets`, { category: 'food', amount: 1502, currency: 'JPY' });
+  r = await iu.get(`/itineraries/${it.id}/budget-summary?currency=USD`);
+  check('ITN-18', 'JPY 1502 -> USD 10', r.data.total === 10, r.data.total);
+  await db.collection('exchange_rates').updateMany({}, { $unset: { 'rates.JPY': 1 } });
+  r = await iu.get(`/itineraries/${it.id}/budget-summary?currency=USD`);
+  check('ITN-18', 'rate missing for a currency -> clear 503 message, not a crash', r.status === 503 && /JPY/.test(r.data.message), { s: r.status, m: r.data?.message });
+  r = await g.get(`/exchange-rates/convert?amount=10&from=JPY&to=USD`);
+  check('ITN-18', 'convert endpoint handles missing rate gracefully', r.status === 503, r.status);
+  await db.collection('exchange_rates').deleteMany({});
+
+  setSection('Extra — admin deletes an itinerary that was cloned');
+  const o = await newUser('Orig owner'); const cl = await newUser('Cloner');
+  const oi = (await o.post('/itineraries', { title: 'Clone source', countries: ['FR'], startDate: D(30) })).data;
+  await o.post(`/itineraries/${oi.id}/days`, { cityId: 'paris' });
+  await o.patch(`/itineraries/${oi.id}`, { visibility: 'Public' });
+  const cc = (await cl.post(`/itineraries/${oi.id}/clone`)).data;
+  r = await admin.del(`/admin/content/itinerary/${oi.id}`);
+  check('GEN-10', 'admin deletes itinerary', r.status === 200, r.status);
+  r = await cl.get(`/itineraries/${cc.id}`);
+  check('ITN-01', 'clone survives admin deletion of the original', r.status === 200 && r.data.clonedFrom?.authorName === 'Orig owner', r.status);
+};

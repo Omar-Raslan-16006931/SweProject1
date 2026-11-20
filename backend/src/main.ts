@@ -10,6 +10,7 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { globalValidationPipe } from './common/pipes/validation';
 import { setupSwagger } from './swagger';
+import { load as loadEnv } from './database/env-loader';
 
 function assertEnv(config: ConfigService) {
   const missing = [
@@ -22,12 +23,25 @@ function assertEnv(config: ConfigService) {
   }
 }
 
+/** Fail fast with a clear message (before Nest tries to reach MongoDB) when the .env is missing or incomplete. */
+function assertEnvBeforeStart() {
+  loadEnv();
+  const missing = ['MONGODB_URI', 'JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET'].filter((k) => !process.env[k]);
+  if (missing.length) {
+    Logger.error(`Missing required environment variables: ${missing.join(', ')}. Copy .env.example to .env and fill them in.`, 'Bootstrap');
+    process.exit(1);
+  }
+}
+
 async function bootstrap() {
+  assertEnvBeforeStart();
   // rawBody is required to verify Stripe webhook signatures (PAY-01).
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   const config = app.get(ConfigService);
   assertEnv(config);
 
+  // Large enough for the longest valid payload (a 50,000-character blog post, up to 4 bytes per character).
+  app.useBodyParser('json', { limit: '1mb' });
   app.setGlobalPrefix('api');
   app.use(cookieParser());
   app.enableCors({ origin: config.get<string>('frontendUrl'), credentials: true });

@@ -3,7 +3,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsArray, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Length, Matches, Max, MaxLength, Min, ValidateNested,
 } from 'class-validator';
-import { CabinClass } from '../../../common/enums';
+import { CabinClass, LIMITS } from '../../../common/enums';
 import { PaginationQueryDto } from '../../../common/dto/pagination.dto';
 
 export class CabinDto {
@@ -15,24 +15,28 @@ export class CabinDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(LIMITS.MAX_CABIN_SEATS)
   seats: number;
 
   @ApiProperty({ example: 220, description: 'Price per seat (> 0), platform currency' })
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01, { message: 'price must be greater than 0' })
+  @Max(LIMITS.MAX_PRICE)
   price: number;
 
   @ApiProperty({ example: 1, description: 'Free baggage allowance (bag count)' })
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(LIMITS.MAX_BAGS)
   freeBags: number;
 
   @ApiProperty({ example: 23, description: 'Maximum weight (kg) per bag' })
   @Type(() => Number)
   @IsNumber()
   @Min(1)
+  @Max(LIMITS.MAX_BAG_WEIGHT_KG)
   maxBagWeightKg: number;
 }
 
@@ -42,6 +46,7 @@ export class UpdateCabinDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(LIMITS.MAX_CABIN_SEATS)
   seats?: number;
 
   @ApiPropertyOptional({ example: 199 })
@@ -49,6 +54,7 @@ export class UpdateCabinDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01, { message: 'price must be greater than 0' })
+  @Max(LIMITS.MAX_PRICE)
   price?: number;
 
   @ApiPropertyOptional({ example: 1 })
@@ -56,6 +62,7 @@ export class UpdateCabinDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(LIMITS.MAX_BAGS)
   freeBags?: number;
 
   @ApiPropertyOptional({ example: 23 })
@@ -63,6 +70,7 @@ export class UpdateCabinDto {
   @Type(() => Number)
   @IsNumber()
   @Min(1)
+  @Max(LIMITS.MAX_BAG_WEIGHT_KG)
   maxBagWeightKg?: number;
 }
 

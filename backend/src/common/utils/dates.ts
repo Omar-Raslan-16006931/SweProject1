@@ -23,6 +23,12 @@ export function todayUtc(): Date {
   return DateTime.utc().startOf('day').toJSDate();
 }
 
+/** Today's calendar date in an IANA zone, as the same UTC-midnight Date used for stored date-only values. */
+export function todayInZone(zone: string): Date {
+  const local = DateTime.now().setZone(zone).toISODate() as string;
+  return DateTime.fromISO(local, { zone: 'utc' }).toJSDate();
+}
+
 /** All calendar dates d with start <= d < endExclusive (UTC midnights). */
 export function eachNight(start: Date, endExclusive: Date): Date[] {
   const out: Date[] = [];
@@ -52,6 +58,10 @@ export function localToUtc(local: string, zone: string, field: string): Date {
   }
   const dt = DateTime.fromISO(local, { zone });
   if (!dt.isValid) throw new BadRequestException({ message: `${field} is not a valid date-time`, field });
+  // A wall-clock time skipped by a daylight-saving change (e.g. 02:30 when clocks jump 02:00 -> 03:00) does not exist.
+  if (dt.toFormat("yyyy-MM-dd'T'HH:mm") !== local.slice(0, 16)) {
+    throw new BadRequestException({ message: `${field} ${local.slice(0, 16)} does not exist in ${zone} (daylight-saving time change)`, field });
+  }
   return dt.toUTC().toJSDate();
 }
 

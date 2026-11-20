@@ -62,6 +62,23 @@ export class UploadsService {
     return out;
   }
 
+  /** Deletes files that were written for a request that then failed (no orphaned files on disk). */
+  async removeAll(images: { filename: string }[]) {
+    for (const im of images) await this.remove(im.filename);
+  }
+
+  /**
+   * Mongo filter that only matches while the array still has room for `adding` more items,
+   * so concurrent uploads can never push an entity above the GEN-08 limit.
+   */
+  roomFor(field: string, adding: number, max = MAX_IMAGES_PER_ENTITY) {
+    return { [`${field}.${max - adding}`]: { $exists: false } };
+  }
+
+  limitError(max = MAX_IMAGES_PER_ENTITY) {
+    return new BadRequestException({ message: `A maximum of ${max} image(s) is allowed` });
+  }
+
   async remove(filename?: string) {
     if (!filename) return;
     const full = resolve(this.dir, filename);

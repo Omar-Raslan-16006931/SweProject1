@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type, Transform } from 'class-transformer';
+import { LIMITS } from '../../../common/enums';
 import {
   ArrayUnique, IsArray, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested,
 } from 'class-validator';
@@ -42,12 +43,14 @@ export class BaggagePolicyDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01, { message: 'extraBagPrice must be greater than 0' })
+  @Max(LIMITS.MAX_PRICE)
   extraBagPrice: number;
 
   @ApiProperty({ example: 2, description: 'Maximum extra bags per passenger (>= 0)' })
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(LIMITS.MAX_BAGS)
   maxExtraBags: number;
 }
 

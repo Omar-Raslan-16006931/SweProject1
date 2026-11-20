@@ -258,8 +258,13 @@
                         "name": "unreadOnly",
                         "required": false,
                         "in": "query",
+                        "description": "Only unread notifications",
                         "schema": {
-                            "type": "boolean"
+                            "type": "string",
+                            "enum": [
+                                "true",
+                                "false"
+                            ]
                         }
                     }
                 ],

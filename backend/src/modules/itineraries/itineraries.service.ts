@@ -130,13 +130,37 @@ export class ItinerariesService {
 
   // ------------------------------------------------------------------ CRUD (ITN-01, ITN-03, ITN-20)
 
+  /** Rejects absurd trip dates (typos such as 1900 or 2999). */
+  private parseStartDate(value: string) {
+    const d = parseDateOnly(value, 'startDate');
+    const now = new Date();
+    const min = new Date(Date.UTC(now.getUTCFullYear() - 50, 0, 1));
+    const max = new Date(Date.UTC(now.getUTCFullYear() + 10, 11, 31));
+    if (d < min || d > max) {
+      throw new BadRequestException({ message: 'startDate must be within 50 years in the past and 10 years in the future', field: 'startDate' });
+    }
+    return d;
+  }
+
+  /** ITN-01 / ITN-05: a day's city must be in one of the itinerary's countries. */
+  private async assertCityInCountries(cityId: string, countries: string[], field = 'cityId') {
+    const city = await this.ref.getCity(cityId, field);
+    if (!countries.includes(city.countryCode)) {
+      throw new BadRequestException({
+        message: `${city.name} is not in this itinerary's countries (${countries.join(', ')}); add ${city.countryCode} to the itinerary first`,
+        field,
+      });
+    }
+    return city;
+  }
+
   async create(dto: CreateItineraryDto, user: AuthUser) {
     const countries = await this.ref.assertCountries(dto.countries);
     const it = await this.itineraries.create({
       owner: user.id,
       title: dto.title,
       countries,
-      startDate: parseDateOnly(dto.startDate, 'startDate'),
+      startDate: this.parseStartDate(dto.startDate),
       visibility: Visibility.PRIVATE,
     });
     return this.serialize(it, { includeOwnerFields: true });
@@ -160,8 +184,16 @@ export class ItinerariesService {
   async update(id: string, dto: UpdateItineraryDto, user: AuthUser) {
     const it = await this.getOwned(id, user);
     if (dto.title !== undefined) it.title = dto.title;
-    if (dto.countries) it.countries = await this.ref.assertCountries(dto.countries);
-    if (dto.startDate) it.startDate = parseDateOnly(dto.startDate, 'startDate');
+    if (dto.countries) {
+      const countries = await this.ref.assertCountries(dto.countries);
+      const cityCountry = new Map((await this.ref.listCities()).map((c: any) => [c._id, c.countryCode]));
+      const stillUsed = [...new Set(it.days.map((d) => cityCountry.get(d.cityId)))].filter((c) => c && !countries.includes(c));
+      if (stillUsed.length) {
+        throw new BadRequestException({ message: `Countries ${stillUsed.join(', ')} still have days in this itinerary; change or delete those days first`, field: 'countries' });
+      }
+      it.countries = countries;
+    }
+    if (dto.startDate) it.startDate = this.parseStartDate(dto.startDate);
     if (dto.visibility) it.visibility = dto.visibility;
     await it.save();
     return this.serialize(it, { includeOwnerFields: true });
@@ -181,7 +213,7 @@ export class ItinerariesService {
   async addDay(id: string, dto: CreateDayDto, user: AuthUser) {
     const it = await this.getOwned(id, user);
     if (it.days.length >= MAX_DAYS) throw new BadRequestException({ message: `An itinerary can have at most ${MAX_DAYS} days` });
-    await this.ref.getCity(dto.cityId, 'cityId');
+    await this.assertCityInCountries(dto.cityId, it.countries);
     const day = { _id: new Types.ObjectId(), cityId: dto.cityId, notes: dto.notes ?? '', activities: [], budgets: [] } as any;
     const pos = dto.position ? Math.min(dto.position, it.days.length + 1) - 1 : it.days.length;
     it.days.splice(pos, 0, day);
@@ -193,7 +225,7 @@ export class ItinerariesService {
     const it = await this.getOwned(id, user);
     const d = this.findDay(it, dayId);
     if (dto.cityId) {
-      await this.ref.getCity(dto.cityId, 'cityId');
+      await this.assertCityInCountries(dto.cityId, it.countries);
       d.cityId = dto.cityId;
     }
     if (dto.notes !== undefined) d.notes = dto.notes;
@@ -282,7 +314,12 @@ export class ItinerariesService {
     this.uploads.validate(files, activity.images.length);
     const saved = await this.uploads.save(files, 'activities');
     activity.images.push(...(saved as any));
-    await it.save();
+    try {
+      await it.save(); // optimistic concurrency: a parallel edit makes this fail with 409, never exceeding the limit
+    } catch (e) {
+      await this.uploads.removeAll(saved);
+      throw e;
+    }
     return this.serialize(it, { includeOwnerFields: true });
   }
 
@@ -340,6 +377,9 @@ export class ItinerariesService {
     this.findDay(it, dto.dayId);
     await this.ref.getCity(dto.fromCityId, 'fromCityId');
     await this.ref.getCity(dto.toCityId, 'toCityId');
+    if (dto.fromCityId === dto.toCityId) {
+      throw new BadRequestException({ message: 'Intercity transport must go between two different cities', field: 'toCityId' });
+    }
     const currency = await this.ref.assertCurrency(dto.currency, 'currency');
     it.transportCosts.push({ ...dto, currency, dayId: new Types.ObjectId(dto.dayId) } as any);
     await it.save();
@@ -356,6 +396,9 @@ export class ItinerariesService {
     }
     if (dto.fromCityId) t.fromCityId = (await this.ref.getCity(dto.fromCityId, 'fromCityId'))._id;
     if (dto.toCityId) t.toCityId = (await this.ref.getCity(dto.toCityId, 'toCityId'))._id;
+    if (t.fromCityId === t.toCityId) {
+      throw new BadRequestException({ message: 'Intercity transport must go between two different cities', field: 'toCityId' });
+    }
     if (dto.mode !== undefined) t.mode = dto.mode;
     if (dto.amount !== undefined) t.amount = dto.amount;
     if (dto.currency) t.currency = await this.ref.assertCurrency(dto.currency, 'currency');

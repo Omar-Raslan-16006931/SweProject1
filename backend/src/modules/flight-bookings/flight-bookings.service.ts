@@ -23,6 +23,9 @@ import { generateBookingReference } from '../../common/utils/reference-code';
 import { forbidden, isDuplicateKeyError, notFound } from '../../common/utils/errors';
 import { paginateQuery } from '../../common/utils/pagination';
 
+/** FLT-19: sanity limit for dates of birth. */
+const MAX_PASSENGER_AGE = 120;
+
 interface PricedSegment {
   flight: any;
   airline: any;
@@ -58,11 +61,20 @@ export class FlightBookingsService implements OnModuleInit, BookingHandler {
 
   private validatePassengers(passengers: PassengerDto[], travelDate: Date) {
     const counts = { adult: 0, child: 0, infant: 0 };
+    const passports = new Set<string>();
     passengers.forEach((p, i) => {
       const dob = parseDateOnly(p.dateOfBirth, `passengers.${i}.dateOfBirth`);
       if (dob > new Date()) {
         throw new BadRequestException({ message: 'Date of birth cannot be in the future', field: `passengers.${i}.dateOfBirth` });
       }
+      if (ageOn(dob, new Date()) > MAX_PASSENGER_AGE) {
+        throw new BadRequestException({ message: `Date of birth is not realistic (older than ${MAX_PASSENGER_AGE} years)`, field: `passengers.${i}.dateOfBirth` });
+      }
+      const passport = p.passportNumber.trim().toUpperCase();
+      if (passports.has(passport)) {
+        throw new BadRequestException({ message: 'Each passenger must have a different passport/ID number', field: `passengers.${i}.passportNumber` });
+      }
+      passports.add(passport);
       const age = ageOn(dob, travelDate);
       const expected = age >= 12 ? PassengerType.ADULT : age >= 2 ? PassengerType.CHILD : PassengerType.INFANT;
       if (expected !== p.type) {
@@ -252,7 +264,8 @@ export class FlightBookingsService implements OnModuleInit, BookingHandler {
         baggageTotal: priced.baggageTotal,
         total: priced.total,
         currency: PLATFORM_CURRENCY,
-        holdExpiresAt: new Date(Date.now() + HOLD_MINUTES * 60000),
+        // FLT-22 / FLT-30: a hold never outlives the first departure (a departed flight cannot be bought).
+        holdExpiresAt: new Date(Math.min(Date.now() + HOLD_MINUTES * 60000, Math.min(...departures))),
         travelDate: new Date(Math.min(...departures)),
         lastDepartureTime: new Date(Math.max(...departures)),
       });
@@ -387,15 +400,23 @@ export class FlightBookingsService implements OnModuleInit, BookingHandler {
   async getPayable(bookingId: string): Promise<PayableBooking> {
     const b = await this.bookings.findById(bookingId).lean();
     if (!b) throw notFound('Flight booking');
+    if (b.status === BookingStatus.PENDING_PAYMENT && !(await this.bookable(b))) {
+      throw new ConflictException({
+        message: 'This booking can no longer be paid: a flight is no longer Scheduled or its airline has been deactivated',
+        code: 'NOT_BOOKABLE',
+      });
+    }
     return {
       id: String(b._id),
       userId: String(b.user),
       status: b.status,
       amount: b.total,
       currency: b.currency,
-      holdExpiresAt: b.holdExpiresAt,
+      // A hold is unusable once the first flight departs (FLT-30), even inside the 10 minutes.
+      holdExpiresAt: b.holdExpiresAt && b.travelDate && b.travelDate < b.holdExpiresAt ? b.travelDate : b.holdExpiresAt,
       policyAccepted: !!b.policyAcceptance?.acceptedAt,
       reference: b.reference,
+      paymentId: b.payment ? String(b.payment) : undefined,
     };
   }
 
@@ -444,16 +465,32 @@ export class FlightBookingsService implements OnModuleInit, BookingHandler {
     return { bookingId: String(b._id), acceptedAt: b.policyAcceptance.acceptedAt };
   }
 
+  /** FLT-30 / ACC-15: every segment still Scheduled and not departed, and every airline still active. */
+  private async bookable(b: { segments: { flight: any; airline: any }[] }) {
+    const now = new Date();
+    const flights = await this.flights.find({ _id: { $in: b.segments.map((s) => s.flight) } }).select('status departureTime').lean();
+    if (flights.length !== new Set(b.segments.map((s) => String(s.flight))).size) return false;
+    if (flights.some((f) => f.status !== FlightStatus.SCHEDULED || f.departureTime <= now)) return false;
+    const activeAirlines = await this.airlines.countDocuments({ _id: { $in: b.segments.map((s) => s.airline) }, active: true });
+    return activeAirlines === new Set(b.segments.map((s) => String(s.airline))).size;
+  }
+
   async attachPayment(bookingId: string, paymentId: string) {
     await this.bookings.updateOne({ _id: bookingId }, { $set: { payment: paymentId } });
   }
 
   /** FLT-23: confirm after verified payment (called from the Stripe webhook). */
   async onPaymentSucceeded(bookingId: string, paymentId: string) {
+    const pending = await this.bookings.findById(bookingId).lean();
+    if (pending?.status === BookingStatus.PENDING_PAYMENT && !(await this.bookable(pending))) {
+      // Paid too late (flight departed/cancelled or airline deactivated): never confirm; the payment is refunded.
+      await this.expireOne(pending._id);
+      return 'not_pending';
+    }
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
         const b = await this.bookings.findOneAndUpdate(
-          { _id: bookingId, status: BookingStatus.PENDING_PAYMENT, holdExpiresAt: { $gt: new Date() } },
+          { _id: bookingId, status: BookingStatus.PENDING_PAYMENT, holdExpiresAt: { $gt: new Date() }, travelDate: { $gt: new Date() } },
           {
             $set: {
               status: BookingStatus.CONFIRMED,
@@ -490,7 +527,7 @@ export class FlightBookingsService implements OnModuleInit, BookingHandler {
   @Cron(CronExpression.EVERY_30_SECONDS)
   async expireHolds() {
     const due = await this.bookings
-      .find({ status: BookingStatus.PENDING_PAYMENT, holdExpiresAt: { $lte: new Date() } })
+      .find({ status: BookingStatus.PENDING_PAYMENT, $or: [{ holdExpiresAt: { $lte: new Date() } }, { travelDate: { $lte: new Date() } }] })
       .select('_id')
       .lean();
     for (const { _id } of due) await this.expireOne(_id);
@@ -518,10 +555,21 @@ export class FlightBookingsService implements OnModuleInit, BookingHandler {
 
   // ------------------------------------------------------------------ cancellation (FLT-26, FLT-06)
 
+  /**
+   * PDF 6.4 / PAY-02: the policy applicable to a booking is the one the user accepted before paying
+   * (snapshot stored with the acceptance), not whatever the airline configures later.
+   */
+  private applicableTiers(b: FlightBookingDocument | any, airline: any): { daysBefore: number; refundPercent: number }[] {
+    const snap = b.policyAcceptance?.policies?.segments;
+    const outSnap = Array.isArray(snap) ? snap.find((s: any) => s.direction === 'outbound') ?? snap[0] : null;
+    if (outSnap && Array.isArray(outSnap.cancellationPolicy)) return outSnap.cancellationPolicy;
+    return airline?.cancellationTiers ?? [];
+  }
+
   private refundQuote(b: FlightBookingDocument | any, airline: any) {
     const outbound = b.segments.find((s: any) => s.direction === 'outbound') ?? b.segments[0];
     const days = wholeDaysUntil(outbound.departureTime);
-    const percent = selectRefundPercent(airline?.cancellationTiers ?? [], days);
+    const percent = selectRefundPercent(this.applicableTiers(b, airline), days);
     return { daysBeforeDeparture: days, refundPercent: percent, refundAmount: money((b.total * percent) / 100) };
   }
 
@@ -547,7 +595,7 @@ export class FlightBookingsService implements OnModuleInit, BookingHandler {
       total: b.total,
       currency: b.currency,
       ...this.refundQuote(b, airline),
-      cancellationPolicy: [...(airline?.cancellationTiers ?? [])].sort((x, y) => y.daysBefore - x.daysBefore),
+      cancellationPolicy: [...this.applicableTiers(b, airline)].sort((x, y) => y.daysBefore - x.daysBefore),
     };
   }
 

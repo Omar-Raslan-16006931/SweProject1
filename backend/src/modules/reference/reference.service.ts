@@ -66,6 +66,17 @@ export class ReferenceService {
     return (await this.currencies.find().lean()).map((c) => c._id);
   }
 
+  /** A city's IANA time zone, taken from its airport in the official dataset (UTC if none). */
+  async cityTimeZone(cityId: string): Promise<string> {
+    const a = await this.airports.findOne({ cityId }).lean();
+    return a?.timeZone ?? 'UTC';
+  }
+
+  async countryTimeZone(countryCode: string): Promise<string> {
+    const a = await this.airports.findOne({ countryCode: (countryCode ?? '').toUpperCase() }).lean();
+    return a?.timeZone ?? 'UTC';
+  }
+
   airportsInCity(cityId: string) {
     return this.airports.find({ cityId }).lean();
   }

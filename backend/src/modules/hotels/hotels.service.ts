@@ -12,7 +12,7 @@ import {
 import { AuthUser } from '../../common/decorators/current-user.decorator';
 import { Role } from '../../common/enums';
 import { conflict, forbidden, isDuplicateKeyError, notFound } from '../../common/utils/errors';
-import { addDays, eachNight, formatDateOnly, nightsBetween, parseDateOnly, todayUtc } from '../../common/utils/dates';
+import { addDays, eachNight, formatDateOnly, nightsBetween, parseDateOnly, todayInZone, todayUtc } from '../../common/utils/dates';
 import { paginateArray, paginateQuery } from '../../common/utils/pagination';
 import { money } from '../../common/utils/refund';
 import { ReferenceService } from '../reference/reference.service';
@@ -100,12 +100,20 @@ export class HotelsService {
     return { from: f, to: t };
   }
 
-  /** Validates stay dates (HTL-11 / HTL-18): check-out after check-in, check-in not in the past. */
-  parseStay(checkIn: string, checkOut: string) {
+  /** "Today" on the hotel's own calendar (time zone of its city), used for every stay-date rule. */
+  async todayForCity(cityId: string) {
+    return todayInZone(await this.ref.cityTimeZone(cityId));
+  }
+
+  /**
+   * Validates stay dates (HTL-11 / HTL-18): check-out after check-in, check-in not in the past.
+   * `today` is the hotel's local date (a guest cannot check in on a day that has already ended there).
+   */
+  parseStay(checkIn: string, checkOut: string, today: Date = todayUtc()) {
     const ci = parseDateOnly(checkIn, 'checkIn');
     const co = parseDateOnly(checkOut, 'checkOut');
     if (co <= ci) throw new BadRequestException({ message: 'Check-out must be after check-in', field: 'checkOut' });
-    if (ci < todayUtc()) throw new BadRequestException({ message: 'Check-in cannot be in the past', field: 'checkIn' });
+    if (ci < today) throw new BadRequestException({ message: 'Check-in cannot be in the past (hotel local date)', field: 'checkIn' });
     return { checkIn: ci, checkOut: co, nights: nightsBetween(ci, co), dates: eachNight(ci, co) };
   }
 
@@ -140,9 +148,18 @@ export class HotelsService {
     const h = await this.getHotel(id);
     this.uploads.validate(files, h.photos.length);
     const saved = await this.uploads.save(files, 'hotels');
-    h.photos.push(...(saved as any));
-    await h.save();
-    return this.serializeHotel(h);
+    let updated: any = null;
+    try {
+      updated = await this.hotels.findOneAndUpdate(
+        { _id: h._id, ...this.uploads.roomFor('photos', saved.length) },
+        { $push: { photos: { $each: saved } } },
+        { new: true },
+      );
+    } finally {
+      if (!updated) await this.uploads.removeAll(saved);
+    }
+    if (!updated) throw this.uploads.limitError();
+    return this.serializeHotel(updated);
   }
 
   async removePhoto(id: string, photoId: string, user: AuthUser) {
@@ -229,6 +246,20 @@ export class HotelsService {
     const r = await this.getRoom(hotelId, roomId);
     if (dto.active === false && r.active && (await this.hasActiveReservation(r._id))) {
       throw new ConflictException({ message: 'Room cannot be deactivated while it has Confirmed or Pending Payment reservations (HTL-06)' });
+    }
+    if (dto.maxOccupancy !== undefined && dto.maxOccupancy < r.maxOccupancy) {
+      const upcoming = await this.reservations
+        .find({
+          'rooms.room': r._id,
+          checkOut: { $gt: todayUtc() },
+          $or: [{ status: 'Confirmed' }, { status: 'Pending Payment', holdExpiresAt: { $gt: new Date() } }],
+        })
+        .select('rooms reference')
+        .lean();
+      const most = Math.max(0, ...upcoming.flatMap((x: any) => x.rooms.filter((y: any) => String(y.room) === String(r._id)).map((y: any) => y.adults + (y.childrenAges?.length ?? 0))));
+      if (dto.maxOccupancy < most) {
+        throw new ConflictException({ message: `Maximum occupancy cannot be lower than the ${most} guest(s) already booked in this room`, field: 'maxOccupancy' });
+      }
     }
     Object.assign(r, dto);
     await r.save();
@@ -396,7 +427,7 @@ export class HotelsService {
   /** HTL-15 (paginated, GEN-05). */
   async availableRooms(hotelId: string, checkIn: string, checkOut: string, page = 1) {
     const h = await this.getHotel(hotelId);
-    const stay = this.parseStay(checkIn, checkOut);
+    const stay = this.parseStay(checkIn, checkOut, await this.todayForCity(h.cityId));
     if (!h.active) {
       return { hotelId, checkIn, checkOut, nights: stay.nights, rooms: [], page: 1, pageSize: 10, total: 0, totalPages: 1, message: 'This hotel is not accepting bookings' };
     }
@@ -425,7 +456,8 @@ export class HotelsService {
     if (q.minPrice !== undefined && q.maxPrice !== undefined && q.minPrice > q.maxPrice) {
       throw new BadRequestException({ message: 'Minimum price cannot be greater than maximum price', field: 'minPrice' });
     }
-    const stay = this.parseStay(q.checkIn, q.checkOut);
+    const zone = q.cityId ? await this.ref.cityTimeZone(q.cityId) : await this.ref.countryTimeZone(q.countryCode as string);
+    const stay = this.parseStay(q.checkIn, q.checkOut, todayInZone(zone));
     const filter: any = { active: true };
     if (q.cityId) {
       await this.ref.getCity(q.cityId, 'cityId');

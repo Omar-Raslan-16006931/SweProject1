@@ -4,7 +4,7 @@ import {
   ArrayMaxSize, ArrayMinSize, IsArray, IsEnum, IsIn, IsInt, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString,
   Length, Matches, Max, MaxLength, Min, ValidateIf,
 } from 'class-validator';
-import { BudgetCategory, CabinClass, Visibility } from '../../../common/enums';
+import { BudgetCategory, CabinClass, LIMITS, Visibility } from '../../../common/enums';
 import { PaginationQueryDto } from '../../../common/dto/pagination.dto';
 
 const trim = ({ value }: any) => (typeof value === 'string' ? value.trim() : value);
@@ -77,7 +77,7 @@ export class CreateActivityDto {
   @IsOptional() @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'time must be HH:mm' })
   time?: string;
   @ApiPropertyOptional({ example: 25, description: 'Optional non-negative cost' })
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0)
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(LIMITS.MAX_AMOUNT)
   cost?: number;
   @ApiPropertyOptional({ example: 'USD', description: "Currency of the cost (default: your preferred currency)" })
   @IsOptional() @IsString() @Length(3, 3) @Transform(upper)
@@ -91,21 +91,21 @@ export class UpdateActivityDto {
   @IsOptional() @ValidateIf((_, v) => v !== null) @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'time must be HH:mm' })
   time?: string | null;
   @ApiPropertyOptional({ nullable: true, description: 'Non-negative cost or null to clear' })
-  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsNumber() @Min(0)
+  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(LIMITS.MAX_AMOUNT)
   cost?: number | null;
   @ApiPropertyOptional() @IsOptional() @IsString() @Length(3, 3) @Transform(upper) currency?: string;
 }
 
 export class CreateBudgetDto {
   @ApiProperty({ enum: BudgetCategory }) @IsEnum(BudgetCategory) category: BudgetCategory;
-  @ApiProperty({ example: 40, description: 'Non-negative amount' }) @Type(() => Number) @IsNumber() @Min(0) amount: number;
+  @ApiProperty({ example: 40, description: 'Non-negative amount' }) @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(LIMITS.MAX_AMOUNT) amount: number;
   @ApiProperty({ example: 'EGP', description: 'Supported currency' }) @IsString() @Length(3, 3) @Transform(upper) currency: string;
   @ApiPropertyOptional({ example: 'Dinner' }) @IsOptional() @IsString() @MaxLength(200) description?: string;
 }
 
 export class UpdateBudgetDto {
   @ApiPropertyOptional({ enum: BudgetCategory }) @IsOptional() @IsEnum(BudgetCategory) category?: BudgetCategory;
-  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() @Min(0) amount?: number;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(LIMITS.MAX_AMOUNT) amount?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() @Length(3, 3) @Transform(upper) currency?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(200) description?: string;
 }
@@ -114,7 +114,7 @@ export class CreateTransportCostDto {
   @ApiProperty({ example: 'Train' }) @IsString() @IsNotEmpty() @MaxLength(50) @Transform(trim) mode: string;
   @ApiProperty({ example: 'cairo' }) @IsString() @IsNotEmpty() fromCityId: string;
   @ApiProperty({ example: 'dubai' }) @IsString() @IsNotEmpty() toCityId: string;
-  @ApiProperty({ example: 150 }) @Type(() => Number) @IsNumber() @Min(0) amount: number;
+  @ApiProperty({ example: 150 }) @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(LIMITS.MAX_AMOUNT) amount: number;
   @ApiProperty({ example: 'USD' }) @IsString() @Length(3, 3) @Transform(upper) currency: string;
   @ApiProperty({ description: 'Itinerary day id this transport belongs to' }) @IsMongoId() dayId: string;
 }
@@ -123,7 +123,7 @@ export class UpdateTransportCostDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @IsNotEmpty() @MaxLength(50) @Transform(trim) mode?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @IsNotEmpty() fromCityId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @IsNotEmpty() toCityId?: string;
-  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() @Min(0) amount?: number;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(LIMITS.MAX_AMOUNT) amount?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() @Length(3, 3) @Transform(upper) currency?: string;
   @ApiPropertyOptional() @IsOptional() @IsMongoId() dayId?: string;
 }

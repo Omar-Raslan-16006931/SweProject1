@@ -54,6 +54,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
         field: e.path,
         messages: [e.message],
       }));
+    } else if ((exception as any)?.name === 'VersionError') {
+      // Two requests edited the same document at once; the loser must retry (never a 500).
+      status = HttpStatus.CONFLICT;
+      message = 'This item was changed by another request at the same time. Please retry.';
+      code = 'CONCURRENT_UPDATE';
+    } else if (
+      typeof (exception as any)?.status === 'number' && (exception as any).status >= 400 && (exception as any).status < 500 &&
+      typeof (exception as any)?.type === 'string'
+    ) {
+      // body-parser errors (e.g. entity.too.large, entity.parse.failed) are client errors, not 500s.
+      status = (exception as any).status;
+      message = (exception as any).type === 'entity.too.large' ? 'Request body is too large' : 'Malformed request body';
     } else if ((exception as any)?.code === 'LIMIT_FILE_SIZE') {
       status = HttpStatus.BAD_REQUEST;
       message = 'Image exceeds the 5 MB limit';

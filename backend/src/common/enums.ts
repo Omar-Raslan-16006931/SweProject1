@@ -118,3 +118,16 @@ export const PAGE_SIZE = 10;
 
 /** FLT-22 / HTL-18 */
 export const HOLD_MINUTES = 10;
+
+/** Sanity limits that reject absurd values (typos, test junk) with a clear 400. */
+export const LIMITS = {
+  MAX_PRICE: 100000, // any single price (seat, night, extra bag), platform currency
+  MAX_AMOUNT: 1000000000, // itinerary budget / cost / transport amount, any currency
+  MAX_CABIN_SEATS: 1000,
+  MAX_BAGS: 10,
+  MAX_BAG_WEIGHT_KG: 100,
+  MAX_ROOM_OCCUPANCY: 20,
+  MAX_ROOM_BEDS: 20,
+  MAX_FLIGHT_HOURS: 24,
+  MAX_SCHEDULE_YEARS_AHEAD: 3,
+};

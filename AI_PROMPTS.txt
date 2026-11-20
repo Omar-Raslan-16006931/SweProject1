@@ -126,11 +126,12 @@ Prompts:
 requirements sheet), check from A-Z every single detail, all edge cases and all scenarios and dumb stuff like
 departure date in past. Don't alter the tests to match output. Make sure there are 0 errors and edge cases."
 Follow-ups: "Check again everything", "Another deeper harder round", "4th and final round, check integration and
-all logic and database schema and everything and deep test it", "Do those for me".
+all logic and database schema and everything and deep test it", "Do those for me", "Merge to main",
+"Another final round".
 
 How the output was used:
 The AI wrote an independent adversarial test suite from the project description and the requirements sheet
-(backend/test/qa, 1012 checks over four rounds: invalid and absurd input, past and impossible dates, time zones and
+(backend/test/qa, 1053 checks over five rounds: invalid and absurd input, past and impossible dates, time zones and
 daylight-saving gaps, concurrent requests, a role/permission matrix over every endpoint, forged tokens, late and
 duplicate Stripe webhooks, an end-to-end journey across all modules, and whole-database consistency checks).
 It ran the suite and the existing 495 e2e checks against a local MongoDB with local Stripe/FXRatesAPI stand-ins,
@@ -140,6 +141,7 @@ deactivated, at most one open PaymentIntent per booking (duplicate successes ref
 and stay dates follow the hotel's local calendar, race-safe image limits with no orphaned files, concurrency
 conflicts return 409 instead of 500, oversized bodies return 413, unreadOnly notification filter, flight search
 date validation, sanity limits on prices/seats/occupancy/amounts, DST-gap local times rejected, round-trip order
-kept on reschedule, room occupancy cannot drop below booked guests, and a clear startup error when .env is missing.
+kept on reschedule, room occupancy cannot drop below booked guests, a clear startup error when .env is missing,
+and stable paging (no item repeated or skipped when sort values tie).
 The FXRatesAPI integration was also checked live. No credentials were shared with the AI.
 ================================================

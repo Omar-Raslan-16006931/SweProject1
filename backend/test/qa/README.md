@@ -1,6 +1,6 @@
 # Adversarial QA suite (Milestone 1)
 
-1012 checks that drive the real HTTP API. Every expectation comes from the project description PDF and the
+1053 checks that drive the real HTTP API. Every expectation comes from the project description PDF and the
 requirements sheet (each check starts with its requirement ID); checks marked "(dumb input)" cover input a
 careless or hostile client could send even where the sheet does not spell out the rule.
 
@@ -15,6 +15,8 @@ every endpoint and role, forged/expired tokens, double-payment and double-refund
 and whole-database consistency checks (seat counters, room-night locks, payments vs refunds, ratings, counters).
 Round 4 adds one end-to-end journey across every module, hotel dates in the hotel's own time zone, and checks of
 what is stored in MongoDB (ObjectId references, real dates, hashed secrets, no card data, seeded reference data).
+Round 5 adds paging integrity when sort values tie, sort orders, flight dates at airports already in "tomorrow",
+e-ticket and CSV contents, refund failures, number/date formats, CORS and response headers.
 
 ## Run
 Use the same local setup as `test/e2e/README.md` (local MongoDB, the two fakes in `test/e2e/fakes`, the

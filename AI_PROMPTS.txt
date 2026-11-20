@@ -30,3 +30,16 @@ docs/, and the per-member work packages. All code was reviewed and is being inte
 feature branches and pull requests into develop. Credentials were NOT shared with the AI: the MongoDB
 Atlas URI and Stripe keys are entered locally in .env only (section 11.2 d).
 ================================================
+
+================================================
+Date: 2026-11-20
+Student: Karim Ahmed
+Tool: Claude (Anthropic) - module generated in the team leader's session; Claude chat used by me for integration help
+Related Requirement: ITN-01, ITN-03, ITN-05, ITN-07, ITN-08, ITN-09, ITN-10, ITN-12, ITN-14, ITN-16, ITN-20, ITN-21, ITN-25, ITN-26
+
+Prompt:
+"I uploaded work package 6 (itineraries) and asked Claude to guide me step by step through applying it: create branch feature/ITN-01-itineraries from develop, apply the patch, commit and open a pull request into develop."
+
+How the output was used:
+I applied the patch (the 4 itineraries files) and registered ItinerariesModule in app.module.ts by hand because the patch did not apply cleanly to develop. I committed in 3 commits. I have not built or tested it in Swagger yet because packages 2-5 (flights, hotels, payments, reviews/exchange rates) are not in develop yet; the team leader will integrate it. I will test the endpoints in Swagger after they are merged.
+================================================

@@ -30,3 +30,85 @@ docs/, and the per-member work packages. All code was reviewed and is being inte
 feature branches and pull requests into develop. Credentials were NOT shared with the AI: the MongoDB
 Atlas URI and Stripe keys are entered locally in .env only (section 11.2 d).
 ================================================
+
+=========================================Date: 2026-11-20
+Student: Saeed Mahmoud
+Tool: Claude desktop app + Claude (Anthropic, module code prepared in the team leader's session)
+Related Requirement: ITN-18, HTL-23, HTL-24
+
+Prompt:
+"I uploaded my work package (exchange rates and hotel reviews) and asked the AI to follow
+AI_INSTRUCTIONS.md: create my branch from develop, add the files, commit and open a pull request."
+
+How the output was used:
+I read through the two modules. The exchange rates service gets daily rates from FXRatesAPI, saves them for the day, and uses the last saved rates if the API is down. It converts amounts through USD. The reviews service only lets a user review a hotel after a Completed stay, allows one review per reservation with a rating from 1 to 5, and recalculates the hotel's average rating after every create, edit or delete. I understand what each endpoint in the two controllers does.
+Student: Karim Ahmed
+Tool: Claude (Anthropic) - module generated in the team leader's session; Claude chat used by me for integration help
+Related Requirement: ITN-01, ITN-03, ITN-05, ITN-07, ITN-08, ITN-09, ITN-10, ITN-12, ITN-14, ITN-16, ITN-20, ITN-21, ITN-25, ITN-26
+
+Prompt:
+"I uploaded work package 6 (itineraries) and asked Claude to guide me step by step through applying it: create branch feature/ITN-01-itineraries from develop, apply the patch, commit and open a pull request into develop."
+
+How the output was used:
+I applied the patch (the 4 itineraries files) and registered ItinerariesModule in app.module.ts by hand because the patch did not apply cleanly to develop. I committed in 3 commits. I have not built or tested it in Swagger yet because packages 2-5 (flights, hotels, payments, reviews/exchange rates) are not in develop yet; the team leader will integrate it. I will test the endpoints in Swagger after they are merged.
+================================================
+=======
+Date: 2026-11-08
+
+Tool: ChatGPT (OpenAI) and GitHub Copilot (VS Code)
+
+Prompt 1 (ChatGPT):
+"Unzip this package and follow AI_AGENT_INSTRUCTIONS.md inside it exactly, step by step. Stop and ask me if any check fails. Do not change the code."
+
+Prompt 2 (GitHub Copilot):
+"In backend/src/app.module.ts, add the import for BlogModule and add BlogModule to the @Module imports array immediately after UsersModule. Do not remove, rewrite, or modify any other code."
+
+How I used the AI output:
+I used ChatGPT to guide me step by step through integrating Package 7 (Blog & Community), troubleshooting build errors, creating a Git feature branch, and preparing a pull request.
+
+I used GitHub Copilot to register BlogModule in app.module.ts. I reviewed the changes, committed my Blog module, and pushed the branch to GitHub.
+
+The build currently has two errors caused by missing itinerary module and service files.
+
+================================================
+Date: 2026-11-05
+Student: Omar Raslan (team leader)
+Tool: Claude (Anthropic)
+Related Requirement: ACC-15, ACC-01, ACC-19, FLT-02, HTL-09, ITN-25, BLG-02, BLG-08, BLG-09 (updated project description)
+
+Prompt:
+"[updated Software Project I - Project Description PDF] check updated stuff and do it"
+
+How the output was used:
+The AI compared the updated PDF with the previous version (the linked requirement and dataset sheets
+were unchanged) and applied the differences: provider deactivation moved to
+PATCH /api/admin/providers/:type/:id/deactivate|reactivate, customers holding Confirmed bookings are
+notified as affected parties, and the requirement IDs on six endpoints were aligned with the revised
+endpoint table. API docs and the traceability matrix were regenerated and the tests extended.
+================================================
+
+================================================
+Date: 2026-11-16
+Student: Omar Raslan (team leader)
+Tool: Claude (Anthropic)
+Related Requirement: All mandatory requirements (audit); HTL-02, GEN-05, GEN-10, ACC-04, FLT-30, GEN-11, GEN-01, GEN-07, GEN-08, PAY-01, GEN-12
+
+Prompts:
+"Make the local branch work and meet all requirements and details and everything 100%"
+"Did you handle stripe payments and APIs and everything?"
+"When you finish show a list of all and every single test and check and also check edge cases for
+everything and so on"
+
+How the output was used:
+The AI re-read the project description and every mandatory requirement, audited the code against each
+one and fixed the gaps it found: hotel details now include the reviews (HTL-02); free rooms, the
+room-status grid and an author's public itineraries are paginated (GEN-05); admins can open hidden
+itineraries (GEN-10); a malformed e-mail at login gets the generic failure (ACC-04); time-driven
+status changes no longer wait for the scheduler (FLT-30, GEN-11); notification and audit-log
+responses were cleaned up (GEN-01, GEN-07); the 5 MB upload error is explicit (GEN-08); a failed
+payment shows an error message (PAY-01); supported currencies are derived from Countries.csv (GEN-12).
+A second end-to-end suite of requirement-detail and edge-case checks was added (495 checks in total,
+listed in docs/testing/TEST_REPORT.md) and the exchange-rate integration was verified against the
+real FXRatesAPI. Stripe was exercised through a local stand-in with signed webhooks; no credentials
+were shared with the AI.
+================================================

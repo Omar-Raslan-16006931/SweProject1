@@ -1,0 +1,55 @@
+{
+  "name": "travel-platform-backend",
+  "version": "1.0.0",
+  "description": "Software Project I (Winter 2026) - Travel Planning and Booking Platform - NestJS backend (Milestone 1)",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main",
+    "seed": "ts-node -r tsconfig-paths/register src/database/seed.ts",
+    "seed:demo": "ts-node -r tsconfig-paths/register src/database/seed-demo.ts",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "export:openapi": "ts-node -r tsconfig-paths/register src/scripts/export-openapi.ts",
+    "test:e2e": "node test/e2e/run.js && node test/e2e/details.js"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/mongoose": "^11.0.3",
+    "@nestjs/platform-express": "^11.1.6",
+    "@nestjs/schedule": "^6.0.0",
+    "@nestjs/swagger": "^11.2.0",
+    "bcryptjs": "^3.0.2",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
+    "cookie-parser": "^1.4.7",
+    "luxon": "^3.7.1",
+    "mongoose": "^8.18.0",
+    "multer": "^2.0.2",
+    "pdfkit": "^0.17.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "stripe": "^18.4.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.10",
+    "@nestjs/schematics": "^11.0.7",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/express": "^5.0.3",
+    "@types/luxon": "^3.7.1",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^22.18.0",
+    "@types/pdfkit": "^0.17.2",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

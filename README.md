@@ -195,10 +195,11 @@ Decisions made by the team where the official documents leave a gap:
 | 2 | Supported currencies (GEN-12, ITN-18) | As defined in PDF 5.1: the currency codes listed in the official `Countries.csv` (**EGP, AED, GBP, USD, EUR, JPY, SAR**); the seed derives them from that file |
 | 3 | Flight booking "Completed" (GEN-11) | When the last segment's flight has departed (FLT-30) |
 | 4 | Extra-baggage fee on round trips | Charged per segment at that segment airline's price per extra bag |
-| 5 | "Days before" for refund tiers (FLT-09, HTL-10) | Whole days (rounded down) between now and departure (UTC) / check-in date |
+| 5 | "Days before" for refund tiers (FLT-09, HTL-10) | Flights: whole 24-hour periods (rounded down) between now and departure (UTC). Hotels: calendar days from today (UTC) to the check-in date, so cancelling the day before check-in counts as 1 day. Refunds always use the tiers the user accepted before paying (stored with the policy acceptance), not later policy changes |
 | 6 | Payments from Swagger | Dev-only `POST /api/payments/:id/test-confirm` confirms with Stripe's test payment method; booking confirmation still happens only via the webhook |
 | 7 | Demo data | Optional `npm run seed:demo`, separate from the required seed |
 | 8 | Extra supporting endpoints | notifications, report submission, admin provider (de)activation, reference-data lookups, cancellation previews (allowed by PDF 8.10) |
+| 9 | Sanity limits on input | Rejected with a 400: flights longer than 24 h or scheduled more than 3 years ahead; any single price above 100,000; cabins above 1,000 seats; more than 10 bags or 100 kg per bag; rooms above 20 guests or 20 beds; itinerary amounts above 1,000,000,000 or with more than 2 decimals; itinerary start dates more than 50 years back or 10 years ahead; passenger names without letters; a day's city must be in one of the itinerary's countries |
 
 Smaller interpretation notes (kept consistent across the code):
 - Hotel availability/blocked ranges are expressed in **nights** (inclusive dates); a stay needs every night
@@ -207,6 +208,12 @@ Smaller interpretation notes (kept consistent across the code):
 - `POST /api/flight-bookings` returns the booking summary only; `POST /api/flight-bookings/hold`
   reserves seats (both listed in PDF 8.4).
 - Hidden reviews are excluded from a hotel's average rating.
+- Hotel stay rules (check-in not in the past, cancellation before the check-in date, days-before-check-in, stay
+  Completed after check-out) use the hotel's local calendar date, taken from the time zone of its city's airport.
+- Flight times that do not exist on the local clock (skipped by a daylight-saving change, e.g. 02:30 when clocks jump
+  02:00 -> 03:00) are rejected rather than silently shifted.
+- A booking has at most one open Stripe PaymentIntent, however often "Pay" is clicked; any extra payment that
+  still succeeds for an already-confirmed booking is refunded in full automatically.
 - The hotel price filter (HTL-12) is applied to the hotel's lowest available room price per night.
 - Status changes driven by time (flight Departed, booking Completed, hold Expired) are also applied when the
   record is read, so they never lag behind the scheduled jobs.
@@ -220,6 +227,11 @@ database: main flows (`run.js`) and requirement details / edge cases (`details.j
 seat and room holds, signed Stripe webhooks, refunds, hold expiry and the FXRatesAPI outage fallback.
 Every check and its result is listed in [`docs/testing/TEST_REPORT.md`](docs/testing/TEST_REPORT.md);
 how to run them is in [`backend/test/e2e/README.md`](backend/test/e2e/README.md).
+
+`backend/test/qa` is an additional adversarial suite (1012 checks) written from the project description and the
+requirements sheet: invalid and absurd input, past dates, time-zone boundaries, races (seats, rooms, likes,
+reports, uploads, logins), hold expiry, late webhooks, policy changes after booking, ownership and role checks.
+Run it against the same local test setup with `node test/qa/run.js` (see [`backend/test/qa/README.md`](backend/test/qa/README.md)).
 
 ## Git workflow (PDF 10)
 

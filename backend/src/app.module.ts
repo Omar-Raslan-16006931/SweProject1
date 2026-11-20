@@ -13,6 +13,7 @@ import { ReferenceModule } from './modules/reference/reference.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
+import { ItinerariesModule } from './modules/itineraries/itineraries.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     UploadsModule,
     // features
     UsersModule,
+    ItinerariesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

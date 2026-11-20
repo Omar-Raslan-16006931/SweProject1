@@ -228,7 +228,7 @@ seat and room holds, signed Stripe webhooks, refunds, hold expiry and the FXRate
 Every check and its result is listed in [`docs/testing/TEST_REPORT.md`](docs/testing/TEST_REPORT.md);
 how to run them is in [`backend/test/e2e/README.md`](backend/test/e2e/README.md).
 
-`backend/test/qa` is an additional adversarial suite (1012 checks) written from the project description and the
+`backend/test/qa` is an additional adversarial suite (1053 checks) written from the project description and the
 requirements sheet: invalid and absurd input, past dates, time-zone boundaries, races (seats, rooms, likes,
 reports, uploads, logins), hold expiry, late webhooks, policy changes after booking, ownership and role checks.
 Run it against the same local test setup with `node test/qa/run.js` (see [`backend/test/qa/README.md`](backend/test/qa/README.md)).

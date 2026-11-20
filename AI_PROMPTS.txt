@@ -30,3 +30,17 @@ docs/, and the per-member work packages. All code was reviewed and is being inte
 feature branches and pull requests into develop. Credentials were NOT shared with the AI: the MongoDB
 Atlas URI and Stripe keys are entered locally in .env only (section 11.2 d).
 ================================================
+
+================================================
+Date: 2026-11-20
+Student: Saeed Mahmoud
+Tool: Claude desktop app + Claude (Anthropic, module code prepared in the team leader's session)
+Related Requirement: ITN-18, HTL-23, HTL-24
+
+Prompt:
+"I uploaded my work package (exchange rates and hotel reviews) and asked the AI to follow
+AI_INSTRUCTIONS.md: create my branch from develop, add the files, commit and open a pull request."
+
+How the output was used:
+I read through the two modules. The exchange rates service gets daily rates from FXRatesAPI, saves them for the day, and uses the last saved rates if the API is down. It converts amounts through USD. The reviews service only lets a user review a hotel after a Completed stay, allows one review per reservation with a rating from 1 to 5, and recalculates the hotel's average rating after every create, edit or delete. I understand what each endpoint in the two controllers does.
+================================================

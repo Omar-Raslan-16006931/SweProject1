@@ -505,7 +505,8 @@ export class HotelsService {
     }
     const dir = q.sortOrder === 'desc' ? -1 : 1;
     results.sort((a, b) =>
-      q.sortBy === 'rating' ? ((a.averageRating ?? 0) - (b.averageRating ?? 0)) * dir : (a.pricePerNight - b.pricePerNight) * dir,
+      (q.sortBy === 'rating' ? ((a.averageRating ?? 0) - (b.averageRating ?? 0)) * dir : (a.pricePerNight - b.pricePerNight) * dir) ||
+      String(a.id).localeCompare(String(b.id)), // stable order across pages
     );
     const page = paginateArray(results, q.page);
     return {

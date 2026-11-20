@@ -347,7 +347,7 @@ export class FlightsService {
     results.sort((a, b) => {
       const va = key === 'price' ? a.lowestPrice : key === 'duration' ? a.durationMinutes : new Date(a.departure.utc).getTime();
       const vb = key === 'price' ? b.lowestPrice : key === 'duration' ? b.durationMinutes : new Date(b.departure.utc).getTime();
-      return (va - vb) * dir;
+      return (va - vb) * dir || String(a.id).localeCompare(String(b.id)); // stable order across pages
     });
     const page = paginateArray(results, q.page);
     return { ...page, message: results.length ? undefined : 'No flights found' };

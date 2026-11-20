@@ -34,7 +34,9 @@ export async function paginateQuery<T>(
   projection?: any,
 ): Promise<Paginated<any>> {
   const p = Math.max(1, page);
-  let q = model.find(filter, projection).sort(sort).skip((p - 1) * PAGE_SIZE).limit(PAGE_SIZE);
+  // GEN-05: _id breaks ties so items with equal sort values keep one order across pages (none repeated or skipped).
+  const stable: Record<string, 1 | -1> = '_id' in sort ? sort : { ...sort, _id: 1 };
+  let q = model.find(filter, projection).sort(stable).skip((p - 1) * PAGE_SIZE).limit(PAGE_SIZE);
   if (populate) q = q.populate(populate);
   const [items, total] = await Promise.all([q.lean().exec(), model.countDocuments(filter).exec()]);
   return buildPage(items as any[], total, p);

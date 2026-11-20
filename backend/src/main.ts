@@ -40,6 +40,7 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   assertEnv(config);
 
+  app.disable('x-powered-by'); // do not advertise the server stack
   // Large enough for the longest valid payload (a 50,000-character blog post, up to 4 bytes per character).
   app.useBodyParser('json', { limit: '1mb' });
   app.setGlobalPrefix('api');

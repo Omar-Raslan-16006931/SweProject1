@@ -219,7 +219,7 @@ export class AdminService {
       base = this.flightBookings;
       pipeline = [...flightPipe, { $unionWith: { coll: 'hotel_reservations', pipeline: hotelPipe as any } }];
     }
-    pipeline.push({ $sort: { date: -1, createdAt: -1 } });
+    pipeline.push({ $sort: { date: -1, createdAt: -1, _id: 1 } }); // _id: stable order across pages (GEN-05)
     const res = await paginateAggregate(base, pipeline, q.page);
     return {
       ...res,

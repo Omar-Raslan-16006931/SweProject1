@@ -56,6 +56,7 @@ SweProject1/
 ├── docs/
 │   ├── requirements/         official PDF + workbooks, TRACEABILITY.md (requirement -> endpoint)
 │   ├── api/                  ENDPOINTS.md + openapi.json
+│   ├── testing/              TEST_REPORT.md (every automated check and its result)
 │   └── team/                 WORK_SPLIT.md
 ├── AI_PROMPTS.txt            mandatory AI prompt log (PDF 11.1)
 ├── .env.example              required environment variables (no secrets)
@@ -194,7 +195,7 @@ Decisions made by the team where the official documents leave a gap:
 | # | Topic | Decision |
 |---|---|---|
 | 1 | Platform currency (PAY-04) | **USD** |
-| 2 | Supported currencies (GEN-12, ITN-18) | The 7 currencies of the official Countries dataset: **EGP, AED, GBP, USD, EUR, JPY, SAR** |
+| 2 | Supported currencies (GEN-12, ITN-18) | As defined in PDF 5.1: the currency codes listed in the official `Countries.csv` (**EGP, AED, GBP, USD, EUR, JPY, SAR**); the seed derives them from that file |
 | 3 | Flight booking "Completed" (GEN-11) | When the last segment's flight has departed (FLT-30) |
 | 4 | Extra-baggage fee on round trips | Charged per segment at that segment airline's price per extra bag |
 | 5 | "Days before" for refund tiers (FLT-09, HTL-10) | Whole days (rounded down) between now and departure (UTC) / check-in date |
@@ -209,8 +210,19 @@ Smaller interpretation notes (kept consistent across the code):
 - `POST /api/flight-bookings` returns the booking summary only; `POST /api/flight-bookings/hold`
   reserves seats (both listed in PDF 8.4).
 - Hidden reviews are excluded from a hotel's average rating.
+- The hotel price filter (HTL-12) is applied to the hotel's lowest available room price per night.
+- Status changes driven by time (flight Departed, booking Completed, hold Expired) are also applied when the
+  record is read, so they never lag behind the scheduled jobs.
 
 ---
+
+## Testing
+
+`backend/test/e2e` holds two end-to-end suites (495 checks) that drive the real HTTP API on a local
+database: main flows (`run.js`) and requirement details / edge cases (`details.js`), including concurrent
+seat and room holds, signed Stripe webhooks, refunds, hold expiry and the FXRatesAPI outage fallback.
+Every check and its result is listed in [`docs/testing/TEST_REPORT.md`](docs/testing/TEST_REPORT.md);
+how to run them is in [`backend/test/e2e/README.md`](backend/test/e2e/README.md).
 
 ## Git workflow (PDF 10)
 

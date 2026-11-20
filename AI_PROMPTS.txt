@@ -69,3 +69,46 @@ I used ChatGPT to guide me step by step through integrating Package 7 (Blog & Co
 I used GitHub Copilot to register BlogModule in app.module.ts. I reviewed the changes, committed my Blog module, and pushed the branch to GitHub.
 
 The build currently has two errors caused by missing itinerary module and service files.
+
+================================================
+Date: 2026-11-05
+Student: Omar Raslan (team leader)
+Tool: Claude (Anthropic)
+Related Requirement: ACC-15, ACC-01, ACC-19, FLT-02, HTL-09, ITN-25, BLG-02, BLG-08, BLG-09 (updated project description)
+
+Prompt:
+"[updated Software Project I - Project Description PDF] check updated stuff and do it"
+
+How the output was used:
+The AI compared the updated PDF with the previous version (the linked requirement and dataset sheets
+were unchanged) and applied the differences: provider deactivation moved to
+PATCH /api/admin/providers/:type/:id/deactivate|reactivate, customers holding Confirmed bookings are
+notified as affected parties, and the requirement IDs on six endpoints were aligned with the revised
+endpoint table. API docs and the traceability matrix were regenerated and the tests extended.
+================================================
+
+================================================
+Date: 2026-11-16
+Student: Omar Raslan (team leader)
+Tool: Claude (Anthropic)
+Related Requirement: All mandatory requirements (audit); HTL-02, GEN-05, GEN-10, ACC-04, FLT-30, GEN-11, GEN-01, GEN-07, GEN-08, PAY-01, GEN-12
+
+Prompts:
+"Make the local branch work and meet all requirements and details and everything 100%"
+"Did you handle stripe payments and APIs and everything?"
+"When you finish show a list of all and every single test and check and also check edge cases for
+everything and so on"
+
+How the output was used:
+The AI re-read the project description and every mandatory requirement, audited the code against each
+one and fixed the gaps it found: hotel details now include the reviews (HTL-02); free rooms, the
+room-status grid and an author's public itineraries are paginated (GEN-05); admins can open hidden
+itineraries (GEN-10); a malformed e-mail at login gets the generic failure (ACC-04); time-driven
+status changes no longer wait for the scheduler (FLT-30, GEN-11); notification and audit-log
+responses were cleaned up (GEN-01, GEN-07); the 5 MB upload error is explicit (GEN-08); a failed
+payment shows an error message (PAY-01); supported currencies are derived from Countries.csv (GEN-12).
+A second end-to-end suite of requirement-detail and edge-case checks was added (495 checks in total,
+listed in docs/testing/TEST_REPORT.md) and the exchange-rate integration was verified against the
+real FXRatesAPI. Stripe was exercised through a local stand-in with signed webhooks; no credentials
+were shared with the AI.
+================================================

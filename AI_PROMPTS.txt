@@ -43,4 +43,13 @@ AI_INSTRUCTIONS.md: create my branch from develop, add the files, commit and ope
 
 How the output was used:
 I read through the two modules. The exchange rates service gets daily rates from FXRatesAPI, saves them for the day, and uses the last saved rates if the API is down. It converts amounts through USD. The reviews service only lets a user review a hotel after a Completed stay, allows one review per reservation with a rating from 1 to 5, and recalculates the hotel's average rating after every create, edit or delete. I understand what each endpoint in the two controllers does.
+Student: Karim Ahmed
+Tool: Claude (Anthropic) - module generated in the team leader's session; Claude chat used by me for integration help
+Related Requirement: ITN-01, ITN-03, ITN-05, ITN-07, ITN-08, ITN-09, ITN-10, ITN-12, ITN-14, ITN-16, ITN-20, ITN-21, ITN-25, ITN-26
+
+Prompt:
+"I uploaded work package 6 (itineraries) and asked Claude to guide me step by step through applying it: create branch feature/ITN-01-itineraries from develop, apply the patch, commit and open a pull request into develop."
+
+How the output was used:
+I applied the patch (the 4 itineraries files) and registered ItinerariesModule in app.module.ts by hand because the patch did not apply cleanly to develop. I committed in 3 commits. I have not built or tested it in Swagger yet because packages 2-5 (flights, hotels, payments, reviews/exchange rates) are not in develop yet; the team leader will integrate it. I will test the endpoints in Swagger after they are merged.
 ================================================

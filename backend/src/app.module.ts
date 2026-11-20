@@ -20,6 +20,7 @@ import { HotelsModule } from './modules/hotels/hotels.module';
 import { HotelBookingsModule } from './modules/hotel-bookings/hotel-bookings.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { ItinerariesModule } from './modules/itineraries/itineraries.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
     HotelBookingsModule,
     ReviewsModule,
     PaymentsModule,
+    ItinerariesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
